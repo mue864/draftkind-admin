@@ -11,6 +11,9 @@ import type {
   AuthResponse,
   GoogleBillingDeadLetter,
   GoogleBillingReplayResponse,
+  RevenueCatBillingDeadLetter,
+  RevenueCatBillingReplayResponse,
+  RevenueCatCatalogSyncResponse,
 } from "../types/api";
 
 const defaultBaseUrl = "https://api.draftkind.com";
@@ -141,6 +144,33 @@ export async function getBillingDeadLetters(limit = 20, status?: string) {
 export async function replayBillingDeadLetter(eventId: string) {
   const response = await api.post<GoogleBillingReplayResponse>(
     `/subscriptions/admin/google-billing/dead-letters/${eventId}/replay`,
+  );
+  return response.data;
+}
+
+export async function getRevenueCatBillingDeadLetters(limit = 20, status?: string) {
+  const response = await api.get<RevenueCatBillingDeadLetter[]>(
+    "/subscriptions/admin/revenuecat-billing/dead-letters",
+    {
+      params: {
+        limit,
+        status: status || undefined,
+      },
+    },
+  );
+  return response.data;
+}
+
+export async function replayRevenueCatBillingDeadLetter(eventId: string) {
+  const response = await api.post<RevenueCatBillingReplayResponse>(
+    `/subscriptions/admin/revenuecat-billing/dead-letters/${eventId}/replay`,
+  );
+  return response.data;
+}
+
+export async function syncRevenueCatCatalog() {
+  const response = await api.post<RevenueCatCatalogSyncResponse>(
+    "/subscriptions/admin/revenuecat-billing/sync-catalog",
   );
   return response.data;
 }

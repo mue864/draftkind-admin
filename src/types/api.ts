@@ -166,3 +166,31 @@ export interface GoogleBillingReplayResponse {
   status: string;
   message: string;
 }
+
+export interface RevenueCatBillingDeadLetter {
+  eventId: string;
+  appUserId: string;
+  eventType: string;
+  entitlementId: string | null;
+  productId: string | null;
+  transactionId: string | null;
+  status: string;
+  retryCount: number;
+  lastError: string | null;
+  nextRetryAt: string | null;
+  lastAttemptAt: string | null;
+  updatedAt: string;
+}
+
+export interface RevenueCatBillingReplayResponse {
+  replayed: boolean;
+  eventId: string;
+  status: string;
+  message: string;
+}
+
+export interface RevenueCatCatalogSyncResponse {
+  plansUpdated: number;
+  plansMissed: number;
+  details: string[];
+}
