@@ -3,7 +3,6 @@ import {
   Activity,
   AlertTriangle,
   Crown,
-  ShieldCheck,
   Sparkles,
   TrendingUp,
   Users,
@@ -56,7 +55,11 @@ export function OverviewPage() {
   const trends = trendsQuery.data;
 
   const conversionRate =
-    overview.totalUsers > 0 ? (overview.activeSubscriptions / overview.totalUsers) * 100 : 0;
+    overview.totalUsers > 0 ? (overview.paidActiveSubscriptions / overview.totalUsers) * 100 : 0;
+  const trialShare =
+    overview.currentSubscriptionsTotal > 0
+      ? (overview.activeTrials / overview.currentSubscriptionsTotal) * 100
+      : 0;
   const failureRate =
     overview.rewritesLast24Hours > 0
       ? (overview.failedRewritesLast24Hours / overview.rewritesLast24Hours) * 100
@@ -70,9 +73,11 @@ export function OverviewPage() {
     failedRewrites: item.failedRewrites,
   }));
 
-  const planSeries = overview.activeSubscriptionsByPlan.map((item) => ({
+  const planSeries = overview.subscriptionsByPlan.map((item) => ({
     name: item.planName,
-    subscribers: item.subscriberCount,
+    paidSubscribers: item.paidSubscriberCount,
+    activeTrials: item.trialSubscriberCount,
+    currentSubscribers: item.currentSubscriberCount,
   }));
 
   const trendTotals = trends.reduce(
@@ -87,7 +92,7 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label="Total users"
           value={formatCompactNumber(overview.totalUsers)}
@@ -96,11 +101,25 @@ export function OverviewPage() {
           tone="mint"
         />
         <StatCard
-          label="Active subscriptions"
-          value={formatCompactNumber(overview.activeSubscriptions)}
-          hint={`${formatPercent(conversionRate)} of total users are in-cycle`}
+          label="Paid subscribers"
+          value={formatCompactNumber(overview.paidActiveSubscriptions)}
+          hint={`${formatPercent(conversionRate)} of total users have converted to paid`}
           icon={Crown}
           tone="default"
+        />
+        <StatCard
+          label="Active trials"
+          value={formatCompactNumber(overview.activeTrials)}
+          hint={`${formatPercent(trialShare)} of current subscriptions are still in preview`}
+          icon={Sparkles}
+          tone="amber"
+        />
+        <StatCard
+          label="Current subscriptions"
+          value={formatCompactNumber(overview.currentSubscriptionsTotal)}
+          hint="Paid and trial subscriptions combined"
+          icon={TrendingUp}
+          tone="mint"
         />
         <StatCard
           label="Rewrites in 24h"
@@ -108,13 +127,6 @@ export function OverviewPage() {
           hint={`${formatCompactNumber(overview.failedRewritesLast24Hours)} failures in the same window`}
           icon={Sparkles}
           tone="mint"
-        />
-        <StatCard
-          label="Guest requests in 24h"
-          value={formatCompactNumber(overview.guestRequestsLast24Hours)}
-          hint={`${formatCompactNumber(overview.activeDayBuckets)} active day buckets`}
-          icon={ShieldCheck}
-          tone="amber"
         />
       </div>
 
@@ -233,6 +245,9 @@ export function OverviewPage() {
                   Growth Mix
                 </div>
                 <h3 className="font-heading text-xl font-bold text-slate-900">Current plan distribution</h3>
+                <p className="mt-2 text-sm text-slate-500">
+                  Trial occupancy is separated from paid subscribers so commercial mix is easier to read.
+                </p>
               </div>
               <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">
                 {planSeries.length} plans
@@ -261,7 +276,8 @@ export function OverviewPage() {
                       background: "#ffffff",
                     }}
                   />
-                  <Bar dataKey="subscribers" fill="#0f172a" radius={[0, 10, 10, 0]} />
+                  <Bar dataKey="paidSubscribers" name="Paid" stackId="subscriptions" fill="#0f172a" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="activeTrials" name="Trials" stackId="subscriptions" fill="#f59e0b" radius={[0, 10, 10, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -288,6 +304,18 @@ export function OverviewPage() {
                 </div>
                 <div className="font-heading text-2xl font-bold text-slate-900">
                   {formatCompactNumber(overview.failedRewritesLast24Hours)}
+                </div>
+              </div>
+
+              <div className="flex items-start justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">Guest requests in 24h</div>
+                  <div className="mt-1 text-sm text-slate-500">
+                    Free-user and anonymous demand still matters because it often precedes conversion or abuse pressure.
+                  </div>
+                </div>
+                <div className="font-heading text-2xl font-bold text-slate-900">
+                  {formatCompactNumber(overview.guestRequestsLast24Hours)}
                 </div>
               </div>
 

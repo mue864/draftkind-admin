@@ -17,19 +17,23 @@ export interface AuthResponse {
 
 export interface AdminPlanSummary {
   planName: string;
-  subscriberCount: number;
+  paidSubscriberCount: number;
+  trialSubscriberCount: number;
+  currentSubscriberCount: number;
 }
 
 export interface AdminOverview {
   totalUsers: number;
   usersCreatedLast24Hours: number;
-  activeSubscriptions: number;
+  paidActiveSubscriptions: number;
+  activeTrials: number;
+  currentSubscriptionsTotal: number;
   rewritesLast24Hours: number;
   failedRewritesLast24Hours: number;
   guestRequestsLast24Hours: number;
   activeMinuteBuckets: number;
   activeDayBuckets: number;
-  activeSubscriptionsByPlan: AdminPlanSummary[];
+  subscriptionsByPlan: AdminPlanSummary[];
 }
 
 export interface AdminTrendPoint {
@@ -64,6 +68,9 @@ export interface AdminPlanCatalog {
   allowedVoicePresets: string[];
   subscriberCap: number | null;
   claimedSubscriptions: number;
+  paidClaimedSubscriptions: number;
+  trialClaimedSubscriptions: number;
+  currentClaimedSubscriptions: number;
   remainingSpots: number | null;
   soldOut: boolean;
 }
@@ -79,6 +86,9 @@ export interface AdminUserListItem {
   currentPlanName: string | null;
   creditsRemaining: number | null;
   subscriptionStatus: string | null;
+  subscriptionKind: string;
+  previewEndsAt: string | null;
+  premiumPreviewUsed: boolean;
 }
 
 export interface AdminUserDetail {
@@ -95,6 +105,9 @@ export interface AdminUserDetail {
   currentPlanName: string | null;
   creditsRemaining: number | null;
   subscriptionStatus: string | null;
+  subscriptionKind: string;
+  previewEndsAt: string | null;
+  premiumPreviewUsed: boolean;
   subscriptionRenewalDate: string | null;
   billingPlatform: string | null;
 }

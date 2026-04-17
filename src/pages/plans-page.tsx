@@ -34,12 +34,20 @@ export function PlansPage() {
   const plans = plansQuery.data;
   const activePlans = plans.filter((plan) => plan.active);
   const soldOutPlans = plans.filter((plan) => plan.soldOut);
-  const totalClaimedSubscriptions = plans.reduce((total, plan) => total + plan.claimedSubscriptions, 0);
+  const totalPaidClaimedSubscriptions = plans.reduce(
+    (total, plan) => total + plan.paidClaimedSubscriptions,
+    0,
+  );
+  const totalTrialOccupancy = plans.reduce(
+    (total, plan) => total + plan.trialClaimedSubscriptions,
+    0,
+  );
   const historyEnabledPlans = plans.filter((plan) => plan.historyEnabled).length;
 
   const chartData = plans.map((plan) => ({
     name: plan.name,
-    subscribers: plan.claimedSubscriptions,
+    paidSubscribers: plan.paidClaimedSubscriptions,
+    activeTrials: plan.trialClaimedSubscriptions,
     credits: plan.monthlyCredits,
   }));
 
@@ -61,11 +69,18 @@ export function PlansPage() {
           value={formatCompactNumber(soldOutPlans.length)}
         />
         <StatCard
-          hint="Total claimed subscriptions across the entire plan catalog"
+          hint="Current paid occupancy across all plans"
           icon={Sparkles}
-          label="Claimed subscriptions"
+          label="Paid claimed"
           tone="mint"
-          value={formatCompactNumber(totalClaimedSubscriptions)}
+          value={formatCompactNumber(totalPaidClaimedSubscriptions)}
+        />
+        <StatCard
+          hint="Preview users currently occupying paid-plan access"
+          icon={Sparkles}
+          label="Trial occupancy"
+          tone="amber"
+          value={formatCompactNumber(totalTrialOccupancy)}
         />
         <StatCard
           hint="How many admin-managed plans support saved history"
@@ -81,7 +96,7 @@ export function PlansPage() {
           <div className="flex items-start justify-between mb-6">
             <div>
               <div className="text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">Catalog pressure</div>
-              <h3 className="text-lg font-bold text-slate-800">Subscription load across current plans</h3>
+              <h3 className="text-lg font-bold text-slate-800">Paid vs trial occupancy across current plans</h3>
             </div>
             <div className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-medium border border-slate-200">
               <span>{plans.length} total plans</span>
@@ -90,10 +105,10 @@ export function PlansPage() {
 
           <div className="w-full flex-1 min-h-[360px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="name" stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
+                <BarChart data={chartData}>
+                  <CartesianGrid stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="name" stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
+                  <YAxis stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
                 <Tooltip
                   contentStyle={{
                     background: "#ffffff",
@@ -103,7 +118,8 @@ export function PlansPage() {
                   }}
                   cursor={{fill: '#f8fafc'}}
                 />
-                <Bar dataKey="subscribers" fill="#4f46e5" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="paidSubscribers" stackId="occupancy" fill="#4f46e5" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="activeTrials" stackId="occupancy" fill="#f59e0b" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -139,16 +155,16 @@ export function PlansPage() {
                     <strong className="block text-lg font-bold text-slate-900">{formatCompactNumber(plan.monthlyCredits)}</strong>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                    <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Claimed</span>
-                    <strong className="block text-lg font-bold text-slate-900">{formatCompactNumber(plan.claimedSubscriptions)}</strong>
+                    <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Paid</span>
+                    <strong className="block text-lg font-bold text-slate-900">{formatCompactNumber(plan.paidClaimedSubscriptions)}</strong>
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                    <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Trials</span>
+                    <strong className="block text-lg font-bold text-slate-900">{formatCompactNumber(plan.trialClaimedSubscriptions)}</strong>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                     <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Remaining</span>
                     <strong className="block text-lg font-bold text-slate-900">{plan.remainingSpots == null ? "Unlimited" : formatCompactNumber(plan.remainingSpots)}</strong>
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                    <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Max rewrite chars</span>
-                    <strong className="block text-lg font-bold text-slate-900">{formatCompactNumber(plan.maxCharactersPerRewrite)}</strong>
                   </div>
                 </div>
 
@@ -163,11 +179,13 @@ export function PlansPage() {
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-4 border-t border-slate-100 gap-4">
                   <div className="flex items-center space-x-4 text-sm font-medium text-slate-500">
+                    <span>{formatCompactNumber(plan.currentClaimedSubscriptions)} current</span>
+                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                     <span>{plan.allowedTones.length} tones</span>
                     <span className="w-1 h-1 rounded-full bg-slate-300"></span>
                     <span>{plan.allowedTemplates.length} templates</span>
                     <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                    <span>{plan.allowedVoicePresets.length} presets</span>
+                    <span>{formatCompactNumber(plan.maxCharactersPerRewrite)} max chars</span>
                   </div>
 
                   <button

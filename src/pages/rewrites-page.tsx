@@ -63,13 +63,13 @@ export function RewritesPage() {
           </div>
         </Panel>
 
-        <Panel className="flex flex-col overflow-hidden p-0">
+        <Panel className="flex h-[42rem] flex-col overflow-hidden p-0">
           <div className="p-6 border-b border-slate-200 shrink-0 bg-white">
             <div className="text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">Recent requests</div>
             <h3 className="text-lg font-bold text-slate-800">Latest rewrite and reply events</h3>
           </div>
 
-          <div className="flex-1 overflow-x-auto overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
             <table className="w-full text-left border-collapse">
               <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
                 <tr>

@@ -12,6 +12,23 @@ import {
   initials,
 } from "../lib/format";
 
+function subscriptionKindClasses(kind: string | null) {
+  switch (kind) {
+    case "TRIAL":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "PAID":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "LIFETIME":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+function subscriptionKindLabel(kind: string | null) {
+  return kind ?? "FREE";
+}
+
 export function UsersPage() {
   const [query, setQuery] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -43,7 +60,7 @@ export function UsersPage() {
   const statusCount = useMemo(() => {
     const counts = new Map<string, number>();
     for (const user of usersQuery.data ?? []) {
-      const key = user.subscriptionStatus ?? "NONE";
+      const key = subscriptionKindLabel(user.subscriptionKind);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return Array.from(counts.entries());
@@ -62,8 +79,8 @@ export function UsersPage() {
                 Search users, inspect billing posture, and review usage
               </h3>
               <p className="mt-2 text-sm text-slate-500 max-w-2xl">
-                Pull up a customer by name or email, then inspect their current plan,
-                credit posture, rewrite volume, and account state.
+                Pull up a customer by name or email, then inspect their current access,
+                preview status, rewrite volume, and account state without blending trial into paid.
               </p>
             </div>
 
@@ -140,13 +157,16 @@ export function UsersPage() {
                         <span
                           className={[
                             "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
-                            user.subscriptionStatus === "ACTIVE"
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-slate-200 bg-slate-100 text-slate-600",
+                            subscriptionKindClasses(user.subscriptionKind),
                           ].join(" ")}
                         >
-                          {user.subscriptionStatus ?? "NONE"}
+                          {subscriptionKindLabel(user.subscriptionKind)}
                         </span>
+                        {user.subscriptionKind === "TRIAL" && user.previewEndsAt ? (
+                          <span className="inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-700">
+                            Ends {formatDate(user.previewEndsAt)}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </motion.button>
@@ -198,9 +218,14 @@ export function UsersPage() {
                       <Shield size={14} />
                       {detailQuery.data.role}
                     </span>
-                    <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                    <span
+                      className={[
+                        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold",
+                        subscriptionKindClasses(detailQuery.data.subscriptionKind),
+                      ].join(" ")}
+                    >
                       <TimerReset size={14} />
-                      {detailQuery.data.subscriptionStatus ?? "No active subscription"}
+                      {subscriptionKindLabel(detailQuery.data.subscriptionKind)}
                     </span>
                   </div>
                 </div>
@@ -226,27 +251,35 @@ export function UsersPage() {
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                     <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      <Coins size={13} />
-                      Credits remaining
+                      <CalendarDays size={13} />
+                      Current access
                     </div>
-                    <div className="mt-3 text-2xl font-bold text-slate-900 font-heading">
-                      {detailQuery.data.creditsRemaining ?? 0}
+                    <div className="mt-3 text-lg font-bold text-slate-900 font-heading">
+                      {detailQuery.data.currentPlanName ?? "None"}
                     </div>
                   </div>
 
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
                     <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      <CalendarDays size={13} />
-                      Current plan
+                      {detailQuery.data.subscriptionKind === "TRIAL" ? <TimerReset size={13} /> : <Coins size={13} />}
+                      {detailQuery.data.subscriptionKind === "TRIAL" ? "Preview ends" : "Credits remaining"}
                     </div>
-                    <div className="mt-3 text-lg font-bold text-slate-900 font-heading">
-                      {detailQuery.data.currentPlanName ?? "None"}
+                    <div className="mt-3 text-2xl font-bold text-slate-900 font-heading">
+                      {detailQuery.data.subscriptionKind === "TRIAL"
+                        ? formatDate(detailQuery.data.previewEndsAt)
+                        : detailQuery.data.creditsRemaining ?? 0}
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="mt-6 grid gap-3">
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <span className="text-sm font-medium text-slate-500">Subscription status</span>
+                  <strong className="text-sm font-bold text-slate-900">
+                    {detailQuery.data.subscriptionStatus ?? "Unavailable"}
+                  </strong>
+                </div>
                 <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
                   <span className="text-sm font-medium text-slate-500">History saving</span>
                   <strong className="text-sm font-bold text-slate-900">
@@ -266,9 +299,21 @@ export function UsersPage() {
                   </strong>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <span className="text-sm font-medium text-slate-500">Renewal date</span>
+                  <span className="text-sm font-medium text-slate-500">
+                    {detailQuery.data.subscriptionKind === "TRIAL" ? "Preview ends" : "Renewal date"}
+                  </span>
                   <strong className="text-sm font-bold text-slate-900">
-                    {formatDate(detailQuery.data.subscriptionRenewalDate)}
+                    {formatDate(
+                      detailQuery.data.subscriptionKind === "TRIAL"
+                        ? detailQuery.data.previewEndsAt
+                        : detailQuery.data.subscriptionRenewalDate,
+                    )}
+                  </strong>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <span className="text-sm font-medium text-slate-500">Premium preview used</span>
+                  <strong className="text-sm font-bold text-slate-900">
+                    {detailQuery.data.premiumPreviewUsed ? "Yes" : "No"}
                   </strong>
                 </div>
                 <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
