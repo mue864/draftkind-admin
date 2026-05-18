@@ -1,9 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { CalendarDays, Coins, Search, Shield, TimerReset } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  AtSign,
+  CalendarClock,
+  CheckCircle2,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  Users,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Panel } from "../components/panel";
+import {
+  EmptyShell,
+  ErrorShell,
+  LoadingShell,
+  Pill,
+  PillVariant,
+  SectionHead,
+  Tile,
+} from "../components/ui";
 import { getApiErrorMessage, getUserDetail, getUsers } from "../lib/api";
 import {
   formatCompactNumber,
@@ -12,21 +30,15 @@ import {
   initials,
 } from "../lib/format";
 
-function subscriptionKindClasses(kind: string | null) {
-  switch (kind) {
-    case "TRIAL":
-      return "border-amber-200 bg-amber-50 text-amber-700";
-    case "PAID":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "LIFETIME":
-      return "border-violet-200 bg-violet-50 text-violet-700";
-    default:
-      return "border-slate-200 bg-slate-100 text-slate-600";
-  }
-}
+const subscriptionKindVariant: Record<string, PillVariant> = {
+  TRIAL: "amber",
+  PAID: "emerald",
+  LIFETIME: "violet",
+  FREE: "neutral",
+};
 
-function subscriptionKindLabel(kind: string | null) {
-  return kind ?? "FREE";
+function subscriptionPill(kind: string) {
+  return subscriptionKindVariant[kind.toUpperCase()] ?? "neutral";
 }
 
 export function UsersPage() {
@@ -35,302 +47,277 @@ export function UsersPage() {
 
   const usersQuery = useQuery({
     queryKey: ["admin", "users", query],
-    queryFn: () => getUsers(query, 24),
+    queryFn: () => getUsers(query),
+    refetchInterval: 60_000,
   });
 
-  useEffect(() => {
-    if (!usersQuery.data?.length) {
-      setSelectedUserId(null);
-      return;
-    }
-
-    setSelectedUserId((current) =>
-      current && usersQuery.data.some((item) => item.userId === current)
-        ? current
-        : usersQuery.data[0].userId,
-    );
-  }, [usersQuery.data]);
-
-  const detailQuery = useQuery({
-    queryKey: ["admin", "users", selectedUserId, "detail"],
-    queryFn: () => getUserDetail(selectedUserId!),
+  const userDetailQuery = useQuery({
+    queryKey: ["admin", "user-detail", selectedUserId],
+    queryFn: () => getUserDetail(selectedUserId as string),
     enabled: Boolean(selectedUserId),
   });
 
-  const statusCount = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const user of usersQuery.data ?? []) {
-      const key = subscriptionKindLabel(user.subscriptionKind);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return Array.from(counts.entries());
-  }, [usersQuery.data]);
+  const list = usersQuery.data ?? [];
+  const stats = useMemo(() => {
+    const paid = list.filter(
+      (u) => u.subscriptionKind?.toUpperCase() === "PAID",
+    ).length;
+    const trial = list.filter(
+      (u) => u.subscriptionKind?.toUpperCase() === "TRIAL",
+    ).length;
+    return { paid, trial, total: list.length };
+  }, [list]);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-6">
-        <Panel className="flex flex-col gap-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="text-xs font-semibold text-indigo-600 tracking-[0.22em] uppercase mb-2">
-                People And Plans
-              </div>
-              <h3 className="text-2xl font-bold text-slate-900 font-heading tracking-tight">
-                Search users, inspect billing posture, and review usage
-              </h3>
-              <p className="mt-2 text-sm text-slate-500 max-w-2xl">
-                Pull up a customer by name or email, then inspect their current access,
-                preview status, rewrite volume, and account state without blending trial into paid.
-              </p>
-            </div>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Tile
+          label="In view"
+          accent="indigo"
+          icon={Users}
+          value={formatCompactNumber(stats.total)}
+          hint="Result count"
+        />
+        <Tile
+          label="Paid"
+          accent="emerald"
+          icon={CheckCircle2}
+          value={formatCompactNumber(stats.paid)}
+          hint="Active paid subs"
+        />
+        <Tile
+          label="Trialing"
+          accent="amber"
+          icon={Sparkles}
+          value={formatCompactNumber(stats.trial)}
+          hint="In trial window"
+        />
+        <Tile
+          label="Free"
+          accent="slate"
+          icon={UserRound}
+          value={formatCompactNumber(stats.total - stats.paid - stats.trial)}
+          hint="No paid plan"
+        />
+      </div>
 
-            <div className="flex flex-wrap gap-2">
-              {statusCount.map(([status, count]) => (
-                <span
-                  className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600"
-                  key={status}
-                >
-                  {status}: {count}
-                </span>
-              ))}
-            </div>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <Panel className="p-0">
+          <div className="border-b border-slate-200/70 p-6">
+            <SectionHead
+              eyebrow="Directory"
+              eyebrowIcon={Users}
+              title="Accounts"
+              description="Search and inspect any account in seconds."
+              trailing={
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                  <Search size={14} className="text-slate-400" />
+                  <input
+                    type="search"
+                    placeholder="Search email or name"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    className="w-56 bg-transparent text-xs font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                  />
+                </div>
+              }
+            />
           </div>
 
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm shadow-slate-100/80 transition-colors focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-100">
-            <Search className="text-slate-400" size={18} />
-            <input
-              className="w-full border-0 bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by email or name"
-              value={query}
-            />
-          </label>
-
           {usersQuery.isLoading ? (
-            <div className="flex min-h-56 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 text-sm font-medium text-slate-500">
-              Loading users...
+            <div className="p-6">
+              <LoadingShell label="Loading users…" />
             </div>
           ) : usersQuery.error ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-medium text-rose-600">
-              {getApiErrorMessage(usersQuery.error)}
+            <div className="p-6">
+              <ErrorShell message={getApiErrorMessage(usersQuery.error)} />
+            </div>
+          ) : list.length === 0 ? (
+            <div className="p-6">
+              <EmptyShell title="No matches" description="Try another query." />
             </div>
           ) : (
-            <div className="grid gap-3">
-              {(usersQuery.data ?? []).map((user, index) => {
-                const isActive = selectedUserId === user.userId;
-
+            <ul className="max-h-[44rem] divide-y divide-slate-100 overflow-y-auto">
+              {list.map((user) => {
+                const active = user.userId === selectedUserId;
                 return (
-                  <motion.button
-                    key={user.userId}
-                    className={[
-                      "group w-full rounded-2xl border px-5 py-4 text-left transition-all",
-                      isActive
-                        ? "border-indigo-200 bg-indigo-50/70 shadow-sm shadow-indigo-100"
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80",
-                    ].join(" ")}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={() => setSelectedUserId(user.userId)}
-                    transition={{ duration: 0.26, delay: index * 0.02 }}
-                    type="button"
-                  >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-sm font-bold text-white shadow-sm shadow-slate-300/60">
-                          {initials(user.firstName, user.lastName)}
+                  <li key={user.userId}>
+                    <motion.button
+                      whileHover={{ x: 4 }}
+                      type="button"
+                      onClick={() => setSelectedUserId(user.userId)}
+                      className={`flex w-full items-center gap-4 px-6 py-4 text-left transition ${
+                        active
+                          ? "bg-gradient-to-r from-indigo-50/80 via-sky-50/60 to-transparent"
+                          : "hover:bg-slate-50/70"
+                      }`}
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-sky-500 text-xs font-bold text-white shadow">
+                        {initials(user.firstName, user.lastName)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-bold text-slate-900">
+                          {user.firstName || user.lastName
+                            ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim()
+                            : user.email}
                         </div>
-
-                        <div className="min-w-0">
-                          <div className="truncate text-base font-bold text-slate-900">
-                            {user.firstName} {user.lastName}
-                          </div>
-                          <div className="truncate text-sm font-medium text-slate-500">
-                            {user.email}
-                          </div>
+                        <div className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] font-medium text-slate-500">
+                          <AtSign size={10} />
+                          {user.email}
                         </div>
                       </div>
-
-                      <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                          {user.currentPlanName ?? "No plan"}
-                        </span>
-                        <span
-                          className={[
-                            "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
-                            subscriptionKindClasses(user.subscriptionKind),
-                          ].join(" ")}
-                        >
-                          {subscriptionKindLabel(user.subscriptionKind)}
-                        </span>
-                        {user.subscriptionKind === "TRIAL" && user.previewEndsAt ? (
-                          <span className="inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-700">
-                            Ends {formatDate(user.previewEndsAt)}
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <Pill variant={subscriptionPill(user.subscriptionKind)}>
+                          {user.subscriptionKind || "FREE"}
+                        </Pill>
+                        {user.currentPlanName ? (
+                          <span className="text-[10px] font-semibold text-slate-500">
+                            {user.currentPlanName}
                           </span>
                         ) : null}
                       </div>
-                    </div>
-                  </motion.button>
+                    </motion.button>
+                  </li>
                 );
               })}
-
-              {usersQuery.data?.length === 0 ? (
-                <div className="flex min-h-48 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 text-sm font-medium text-slate-500">
-                  No users matched your search.
-                </div>
-              ) : null}
-            </div>
+            </ul>
           )}
         </Panel>
 
-        <Panel className="flex min-h-[620px] flex-col">
-          {detailQuery.isLoading ? (
-            <div className="flex h-full min-h-56 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 text-sm font-medium text-slate-500">
-              Loading user detail...
-            </div>
-          ) : detailQuery.error ? (
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-medium text-rose-600">
-              {getApiErrorMessage(detailQuery.error)}
-            </div>
-          ) : detailQuery.data ? (
-            <>
-              <div className="flex flex-col gap-6">
-                <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-slate-900 text-lg font-bold text-white shadow-lg shadow-slate-300/60">
-                      {initials(detailQuery.data.firstName, detailQuery.data.lastName)}
-                    </div>
+        <Panel>
+          <SectionHead
+            eyebrow="Account detail"
+            eyebrowIcon={UserRound}
+            eyebrowTone="emerald"
+            title={selectedUserId ? "Account profile" : "Select an account"}
+            description={
+              selectedUserId
+                ? "Live snapshot of plan, credits, billing and lifecycle dates."
+                : "Tap any row on the left to see the full account profile."
+            }
+          />
 
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold text-indigo-600 tracking-[0.22em] uppercase mb-2">
-                        Account Detail
-                      </div>
-                      <h3 className="truncate text-2xl font-bold text-slate-900 font-heading tracking-tight">
-                        {detailQuery.data.firstName} {detailQuery.data.lastName}
-                      </h3>
-                      <p className="truncate text-sm font-medium text-slate-500">
-                        {detailQuery.data.email}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                      <Shield size={14} />
-                      {detailQuery.data.role}
-                    </span>
-                    <span
-                      className={[
-                        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold",
-                        subscriptionKindClasses(detailQuery.data.subscriptionKind),
-                      ].join(" ")}
-                    >
-                      <TimerReset size={14} />
-                      {subscriptionKindLabel(detailQuery.data.subscriptionKind)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Total rewrites
-                    </div>
-                    <div className="mt-3 text-2xl font-bold text-slate-900 font-heading">
-                      {formatCompactNumber(detailQuery.data.totalRewriteCount)}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Last 30 days
-                    </div>
-                    <div className="mt-3 text-2xl font-bold text-slate-900 font-heading">
-                      {formatCompactNumber(detailQuery.data.rewritesLast30Days)}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      <CalendarDays size={13} />
-                      Current access
-                    </div>
-                    <div className="mt-3 text-lg font-bold text-slate-900 font-heading">
-                      {detailQuery.data.currentPlanName ?? "None"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      {detailQuery.data.subscriptionKind === "TRIAL" ? <TimerReset size={13} /> : <Coins size={13} />}
-                      {detailQuery.data.subscriptionKind === "TRIAL" ? "Preview ends" : "Credits remaining"}
-                    </div>
-                    <div className="mt-3 text-2xl font-bold text-slate-900 font-heading">
-                      {detailQuery.data.subscriptionKind === "TRIAL"
-                        ? formatDate(detailQuery.data.previewEndsAt)
-                        : detailQuery.data.creditsRemaining ?? 0}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-3">
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <span className="text-sm font-medium text-slate-500">Subscription status</span>
-                  <strong className="text-sm font-bold text-slate-900">
-                    {detailQuery.data.subscriptionStatus ?? "Unavailable"}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <span className="text-sm font-medium text-slate-500">History saving</span>
-                  <strong className="text-sm font-bold text-slate-900">
-                    {detailQuery.data.historyEnabled ? "Enabled" : "Off"}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <span className="text-sm font-medium text-slate-500">Created</span>
-                  <strong className="text-sm font-bold text-slate-900">
-                    {formatDate(detailQuery.data.createdAt)}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <span className="text-sm font-medium text-slate-500">Last updated</span>
-                  <strong className="text-sm font-bold text-slate-900">
-                    {formatDateTime(detailQuery.data.lastUpdatedAt)}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <span className="text-sm font-medium text-slate-500">
-                    {detailQuery.data.subscriptionKind === "TRIAL" ? "Preview ends" : "Renewal date"}
-                  </span>
-                  <strong className="text-sm font-bold text-slate-900">
-                    {formatDate(
-                      detailQuery.data.subscriptionKind === "TRIAL"
-                        ? detailQuery.data.previewEndsAt
-                        : detailQuery.data.subscriptionRenewalDate,
-                    )}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <span className="text-sm font-medium text-slate-500">Premium preview used</span>
-                  <strong className="text-sm font-bold text-slate-900">
-                    {detailQuery.data.premiumPreviewUsed ? "Yes" : "No"}
-                  </strong>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                  <span className="text-sm font-medium text-slate-500">Billing platform</span>
-                  <strong className="text-sm font-bold text-slate-900">
-                    {detailQuery.data.billingPlatform ?? "Unavailable"}
-                  </strong>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex h-full min-h-56 items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 text-center text-sm font-medium text-slate-500">
-              Select a user to inspect their subscription and usage.
-            </div>
-          )}
+          <div className="mt-6">
+            {!selectedUserId ? (
+              <EmptyShell
+                title="Nothing selected"
+                description="Pick a user to inspect their plan, credits, and history."
+              />
+            ) : userDetailQuery.isLoading ? (
+              <LoadingShell label="Loading user…" />
+            ) : userDetailQuery.error || !userDetailQuery.data ? (
+              <ErrorShell message={getApiErrorMessage(userDetailQuery.error)} />
+            ) : (
+              <UserDetailView detail={userDetailQuery.data} />
+            )}
+          </div>
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function UserDetailView({
+  detail,
+}: {
+  detail: ReturnType<typeof Object> extends never
+    ? never
+    : Awaited<ReturnType<typeof getUserDetail>>;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-4 rounded-2xl border border-white/70 bg-gradient-to-br from-indigo-50/70 via-white to-sky-50/40 px-5 py-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-sky-500 font-heading text-base font-bold text-white shadow-lg">
+          {initials(detail.firstName, detail.lastName)}
+        </div>
+        <div className="min-w-0">
+          <div className="font-heading text-lg font-bold tracking-tight text-slate-900">
+            {`${detail.firstName ?? ""} ${detail.lastName ?? ""}`.trim() ||
+              detail.email}
+          </div>
+          <div className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+            <AtSign size={11} />
+            {detail.email}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Pill
+              variant={detail.role === "ADMIN" ? "ink" : "neutral"}
+              icon={ShieldCheck}
+            >
+              {detail.role}
+            </Pill>
+            <Pill variant={subscriptionPill(detail.subscriptionKind)}>
+              {detail.subscriptionKind || "FREE"}
+            </Pill>
+            {detail.currentPlanName ? (
+              <Pill variant="indigo">{detail.currentPlanName}</Pill>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Tile
+          accent="indigo"
+          label="Credits left"
+          value={
+            detail.creditsRemaining == null
+              ? "—"
+              : formatCompactNumber(detail.creditsRemaining)
+          }
+        />
+        <Tile
+          accent="emerald"
+          label="Lifetime rewrites"
+          value={formatCompactNumber(detail.totalRewriteCount)}
+        />
+        <Tile
+          accent="amber"
+          label="30-day rewrites"
+          value={formatCompactNumber(detail.rewritesLast30Days)}
+        />
+        <Tile
+          accent="slate"
+          label="History"
+          value={detail.historyEnabled ? "Enabled" : "Disabled"}
+        />
+      </div>
+
+      <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-5">
+        <div className="mb-3 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+          <CalendarClock size={11} />
+          Lifecycle
+        </div>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
+          <Row k="Created" v={formatDate(detail.createdAt)} />
+          <Row k="Updated" v={formatDateTime(detail.lastUpdatedAt)} />
+          <Row k="Subscription" v={detail.subscriptionStatus ?? "—"} />
+          <Row
+            k="Renewal"
+            v={
+              detail.subscriptionRenewalDate
+                ? formatDate(detail.subscriptionRenewalDate)
+                : "—"
+            }
+          />
+          <Row
+            k="Preview ends"
+            v={
+              detail.previewEndsAt ? formatDateTime(detail.previewEndsAt) : "—"
+            }
+          />
+          <Row k="Billing" v={detail.billingPlatform ?? "—"} />
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-dashed border-slate-200/70 py-1.5 last:border-0">
+      <dt className="text-slate-500">{k}</dt>
+      <dd className="font-semibold text-slate-800">{v}</dd>
     </div>
   );
 }

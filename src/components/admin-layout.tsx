@@ -1,128 +1,356 @@
+import clsx from "clsx";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Activity,
   BadgeDollarSign,
+  Bell,
   ChartNoAxesCombined,
+  ChevronLeft,
+  Command,
   Crown,
   LogOut,
+  PanelLeft,
   Search,
   ShieldCheck,
   Sparkles,
   UsersRound,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { useAdminSession } from "../hooks/use-admin-session";
 import { initials } from "../lib/format";
 
 const navigation = [
-  { to: "/", label: "Overview", icon: ChartNoAxesCombined },
-  { to: "/users", label: "Users", icon: UsersRound },
-  { to: "/rewrites", label: "Rewrite Activity", icon: Activity },
-  { to: "/plans", label: "Plans", icon: Crown },
-  { to: "/billing", label: "Billing Ops", icon: BadgeDollarSign },
-  { to: "/guest-usage", label: "Guest Shield", icon: ShieldCheck },
+  {
+    to: "/",
+    label: "Overview",
+    icon: ChartNoAxesCombined,
+    description: "Live production pulse",
+  },
+  {
+    to: "/users",
+    label: "Users",
+    icon: UsersRound,
+    description: "Accounts & cohorts",
+  },
+  {
+    to: "/rewrites",
+    label: "Rewrite Activity",
+    icon: Activity,
+    description: "Streamed generations",
+  },
+  {
+    to: "/plans",
+    label: "Plans",
+    icon: Crown,
+    description: "Tier mix & trials",
+  },
+  {
+    to: "/billing",
+    label: "Billing Ops",
+    icon: BadgeDollarSign,
+    description: "Revenue health",
+  },
+  {
+    to: "/guest-usage",
+    label: "Guest Shield",
+    icon: ShieldCheck,
+    description: "Anti-abuse signals",
+  },
 ];
 
-function resolveTitle(pathname: string) {
-  const matched = navigation.find((item) =>
-    item.to === "/"
-      ? pathname === "/"
-      : pathname === item.to || pathname.startsWith(`${item.to}/`),
-  );
+const SIDEBAR_STORAGE_KEY = "draftkind.admin.sidebar.collapsed";
 
-  return matched?.label ?? "Overview";
+function resolveActive(pathname: string) {
+  return (
+    navigation.find((item) =>
+      item.to === "/"
+        ? pathname === "/"
+        : pathname === item.to || pathname.startsWith(`${item.to}/`),
+    ) ?? navigation[0]
+  );
 }
 
 export function AdminLayout() {
   const location = useLocation();
   const { session, signOut } = useAdminSession();
 
-  return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 shadow-sm z-10">
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-6 flex items-center space-x-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-md font-heading">DK</div>
-            <div>
-              <div className="font-heading font-bold text-slate-800 tracking-tight">Draftkind</div>
-              <div className="text-xs text-slate-500 font-medium tracking-wide uppercase">Operations Console</div>
-            </div>
-          </div>
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
+  });
 
-          <nav className="px-4 pb-6 space-y-1">
-            {navigation.map(({ to, label, icon: Icon }) => (
-              <NavLink
-                key={to}
-                className={({ isActive }) =>
-                  `flex items-center space-x-3 px-3 py-2.5 rounded-md transition-all duration-200 font-medium ${
-                    isActive
-                      ? "bg-indigo-50 text-indigo-700 shadow-sm"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`
-                }
-                to={to}
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? "1" : "0");
+  }, [collapsed]);
+
+  const active = resolveActive(location.pathname);
+
+  return (
+    <div className="relative flex h-screen overflow-hidden bg-transparent font-sans text-[var(--color-ink)]">
+      {/* Ambient background orbs */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="orb absolute -top-32 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-indigo-300/20 blur-3xl" />
+        <div className="orb absolute bottom-[-12rem] right-[-8rem] h-[26rem] w-[26rem] rounded-full bg-emerald-300/15 blur-3xl" />
+      </div>
+
+      {/* Sidebar */}
+      <motion.aside
+        animate={{ width: collapsed ? 84 : 272 }}
+        transition={{ type: "spring", stiffness: 260, damping: 30 }}
+        className="relative z-20 flex h-full flex-col border-r border-white/60 bg-[#0b1020] text-slate-200 shadow-[0_20px_60px_-30px_rgba(11,16,32,0.55)]"
+      >
+        {/* Header / Brand */}
+        <div
+          className={clsx(
+            "flex items-center gap-3 px-4 pt-6 pb-5",
+            collapsed && "justify-center px-2",
+          )}
+        >
+          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-sky-500 to-teal-500 font-heading text-base font-bold text-white shadow-lg shadow-indigo-500/30">
+            DK
+            <span className="pulse-dot absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-[#0b1020] bg-emerald-400" />
+          </div>
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.div
+                key="brand-label"
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.18 }}
+                className="min-w-0"
               >
-                <Icon size={18} className="shrink-0" />
-                <span>{label}</span>
-              </NavLink>
-            ))}
-          </nav>
+                <div className="truncate font-heading text-base font-bold tracking-tight text-white">
+                  Draftkind
+                </div>
+                <div className="truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                  Ops Console
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        <div className="p-4 border-t border-slate-200 bg-slate-50/50">
-          <div className="flex items-center space-x-3 mb-4 p-2 bg-white rounded-lg border border-slate-200 shadow-sm">
-            <div className="w-9 h-9 bg-slate-200 rounded-full flex items-center justify-center text-sm font-semibold text-slate-700 shrink-0">
-              {initials(session?.user.firstName, session?.user.lastName) || "AD"}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-slate-900 truncate">{session?.user.fullName || "Admin"}</div>
-              <div className="text-xs text-slate-500 truncate">{session?.user.email || "admin@draftkind.com"}</div>
-            </div>
-          </div>
-
-          <button
-            className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
-            onClick={signOut}
-            type="button"
+        {/* Collapse handle */}
+        <button
+          type="button"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setCollapsed((value) => !value)}
+          className="absolute -right-3 top-8 z-30 flex h-7 w-7 items-center justify-center rounded-full border border-white/70 bg-white text-slate-700 shadow-md transition hover:scale-105 hover:text-indigo-600"
+        >
+          <motion.span
+            animate={{ rotate: collapsed ? 180 : 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 22 }}
+            className="flex"
           >
-            <LogOut size={16} />
-            <span>Sign out</span>
+            <ChevronLeft size={14} strokeWidth={2.5} />
+          </motion.span>
+        </button>
+
+        {/* Nav */}
+        <nav
+          className={clsx(
+            "flex-1 overflow-y-auto px-3 py-2",
+            collapsed && "px-2",
+          )}
+        >
+          <div
+            className={clsx(
+              "mb-2 px-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500",
+              collapsed && "sr-only",
+            )}
+          >
+            Monitoring
+          </div>
+          <ul className="space-y-1">
+            {navigation.map(({ to, label, icon: Icon, description }) => (
+              <li key={to} className="relative">
+                <NavLink to={to} end={to === "/"}>
+                  {({ isActive }) => (
+                    <div
+                      className={clsx(
+                        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors",
+                        isActive
+                          ? "bg-white/10 text-white"
+                          : "text-slate-400 hover:bg-white/5 hover:text-slate-100",
+                        collapsed && "justify-center px-0",
+                      )}
+                    >
+                      {isActive && (
+                        <motion.span
+                          layoutId="nav-active-pill"
+                          transition={{
+                            type: "spring",
+                            stiffness: 380,
+                            damping: 30,
+                          }}
+                          className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-indigo-500/25 via-sky-500/20 to-transparent ring-1 ring-inset ring-white/10"
+                        />
+                      )}
+                      <span
+                        className={clsx(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+                          isActive
+                            ? "bg-gradient-to-br from-indigo-500/40 to-sky-500/30 text-white shadow-inner shadow-indigo-400/20"
+                            : "bg-white/[0.04] text-slate-300 group-hover:bg-white/[0.08]",
+                        )}
+                      >
+                        <Icon size={18} strokeWidth={2.2} />
+                      </span>
+                      <AnimatePresence initial={false}>
+                        {!collapsed && (
+                          <motion.div
+                            key={`label-${to}`}
+                            initial={{ opacity: 0, x: -6 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -6 }}
+                            transition={{ duration: 0.16 }}
+                            className="min-w-0 flex-1"
+                          >
+                            <div
+                              className={clsx(
+                                "truncate text-sm font-semibold",
+                                isActive ? "text-white" : "text-slate-200",
+                              )}
+                            >
+                              {label}
+                            </div>
+                            <div className="truncate text-[11px] text-slate-500">
+                              {description}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Collapsed tooltip */}
+                      {collapsed && (
+                        <span className="pointer-events-none absolute left-full ml-3 hidden -translate-x-1 whitespace-nowrap rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-slate-100 opacity-0 shadow-lg transition group-hover:translate-x-0 group-hover:opacity-100 lg:block">
+                          {label}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* Bottom user card */}
+        <div
+          className={clsx("border-t border-white/5 p-3", collapsed && "px-2")}
+        >
+          <div
+            className={clsx(
+              "mb-2 flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-2",
+              collapsed &&
+                "justify-center border-transparent bg-transparent p-0",
+            )}
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 text-xs font-bold text-white shadow-md">
+              {initials(session?.user.firstName, session?.user.lastName) ||
+                "AD"}
+            </div>
+            <AnimatePresence initial={false}>
+              {!collapsed && (
+                <motion.div
+                  key="user-info"
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -6 }}
+                  className="min-w-0 flex-1"
+                >
+                  <div className="truncate text-sm font-semibold text-white">
+                    {session?.user.fullName || "Admin"}
+                  </div>
+                  <div className="truncate text-[11px] text-slate-400">
+                    {session?.user.email || "admin@draftkind.com"}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          <button
+            type="button"
+            onClick={signOut}
+            className={clsx(
+              "group flex w-full items-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-400/10 hover:text-rose-100",
+              collapsed && "justify-center px-2",
+            )}
+          >
+            <LogOut size={14} />
+            {!collapsed && <span>Sign out</span>}
           </button>
         </div>
-      </aside>
+      </motion.aside>
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between shrink-0 shadow-sm z-10">
-          <div>
-            <div className="flex items-center space-x-1.5 text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">
-              <Sparkles size={14} />
-              <span>Premium admin workspace</span>
+      {/* Main pane */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Topbar */}
+        <header className="relative z-10 flex h-[72px] items-center justify-between gap-4 border-b border-white/60 bg-white/70 px-6 backdrop-blur-xl">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setCollapsed((value) => !value)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:border-indigo-200 hover:text-indigo-600 lg:hidden"
+              aria-label="Toggle sidebar"
+            >
+              <PanelLeft size={16} />
+            </button>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-600">
+                <Sparkles size={12} />
+                <span>Monitoring</span>
+                <span className="text-slate-300">/</span>
+                <span className="text-slate-500">{active.label}</span>
+              </div>
+              <h1 className="truncate font-heading text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+                {active.label}
+              </h1>
             </div>
-            <h1 className="text-2xl font-bold font-heading text-slate-900 tracking-tight">{resolveTitle(location.pathname)}</h1>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 px-3 py-2 bg-slate-100 rounded-md text-sm text-slate-500 border border-slate-200/60 shadow-inner">
-              <Search size={16} />
-              <span className="hidden sm:inline-block">Monitoring across Draftkind</span>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-sm transition focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-200 md:flex">
+              <Search size={14} />
+              <input
+                type="search"
+                placeholder="Search dashboards, users, events…"
+                className="w-56 bg-transparent text-sm font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
+              />
+              <span className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                <Command size={10} />K
+              </span>
             </div>
-            <div className="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full flex items-center shadow-sm">
-               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-2 animate-pulse"></span>
-               Production
+
+            <button
+              type="button"
+              className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-indigo-200 hover:text-indigo-600"
+              aria-label="Notifications"
+            >
+              <Bell size={15} />
+              <span className="pulse-dot absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500" />
+            </button>
+
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 shadow-sm">
+              <span className="pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Production
             </div>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8 bg-slate-50/50">
-          <div className="max-w-7xl mx-auto">
+        {/* Page area */}
+        <main className="relative flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
             <AnimatePresence mode="wait">
               <motion.div
                 key={location.pathname}
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.28 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               >
                 <Outlet />
               </motion.div>

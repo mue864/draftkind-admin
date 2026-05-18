@@ -1,10 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BarChart3, RefreshCw, Repeat2, ShieldAlert } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { motion } from "framer-motion";
+import {
+  AlertOctagon,
+  Apple,
+  CreditCard,
+  RefreshCw,
+  Repeat2,
+  ScrollText,
+} from "lucide-react";
+import { useState } from "react";
 
 import { Panel } from "../components/panel";
-import { StatCard } from "../components/stat-card";
+import {
+  EmptyShell,
+  ErrorShell,
+  LoadingShell,
+  Pill,
+  PillVariant,
+  SectionHead,
+  Tile,
+} from "../components/ui";
 import {
   getApiErrorMessage,
   getBillingDeadLetters,
@@ -15,420 +30,314 @@ import {
 } from "../lib/api";
 import { formatCompactNumber, formatDateTime } from "../lib/format";
 
-const filters = ["ALL", "PENDING", "DEAD_LETTER"] as const;
+type Filter = "ALL" | "PENDING" | "DEAD_LETTER";
+
+const statusVariant: Record<string, PillVariant> = {
+  PENDING: "amber",
+  DEAD_LETTER: "rose",
+  RECOVERED: "emerald",
+  REPLAYED: "emerald",
+};
+
+function pillFor(status: string): PillVariant {
+  return statusVariant[status.toUpperCase()] ?? "neutral";
+}
 
 export function BillingOpsPage() {
-  const [googleStatusFilter, setGoogleStatusFilter] = useState<(typeof filters)[number]>("ALL");
-  const [revenueCatStatusFilter, setRevenueCatStatusFilter] =
-    useState<(typeof filters)[number]>("ALL");
-  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState<Filter>("ALL");
+  const params = filter === "ALL" ? undefined : filter;
 
-  const googleBillingQuery = useQuery({
-    queryKey: ["admin", "billing-dead-letters", "google", googleStatusFilter],
-    queryFn: () =>
-      getBillingDeadLetters(24, googleStatusFilter === "ALL" ? undefined : googleStatusFilter),
+  const googleQuery = useQuery({
+    queryKey: ["admin", "billing", "google", params],
+    queryFn: () => getBillingDeadLetters(40, params),
+    refetchInterval: 45_000,
   });
-  const revenueCatBillingQuery = useQuery({
-    queryKey: ["admin", "billing-dead-letters", "revenuecat", revenueCatStatusFilter],
-    queryFn: () =>
-      getRevenueCatBillingDeadLetters(
-        24,
-        revenueCatStatusFilter === "ALL" ? undefined : revenueCatStatusFilter,
-      ),
+  const rcQuery = useQuery({
+    queryKey: ["admin", "billing", "rc", params],
+    queryFn: () => getRevenueCatBillingDeadLetters(40, params),
+    refetchInterval: 45_000,
   });
 
-  const googleReplayMutation = useMutation({
-    mutationFn: replayBillingDeadLetter,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "billing-dead-letters", "google"] });
-    },
-  });
-  const revenueCatReplayMutation = useMutation({
-    mutationFn: replayRevenueCatBillingDeadLetter,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "billing-dead-letters", "revenuecat"] });
-    },
-  });
-  const revenueCatCatalogSyncMutation = useMutation({
-    mutationFn: syncRevenueCatCatalog,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["admin", "billing-dead-letters", "revenuecat"] });
-    },
-  });
-
-  const googleDeadLetters = googleBillingQuery.data ?? [];
-  const googlePendingCount = googleDeadLetters.filter((item) => item.status === "PENDING").length;
-  const googleDeadCount = googleDeadLetters.filter((item) => item.status === "DEAD_LETTER").length;
-  const googleHighestRetryCount = googleDeadLetters.reduce(
-    (max, item) => Math.max(max, item.retryCount),
-    0,
-  );
-  const googleChartData = useMemo(
-    () =>
-      googleDeadLetters.map((item) => ({
-        label: item.eventId.slice(0, 6),
-        retries: item.retryCount,
-      })),
-    [googleDeadLetters],
-  );
-  const revenueCatDeadLetters = revenueCatBillingQuery.data ?? [];
-  const revenueCatPendingCount = revenueCatDeadLetters.filter((item) => item.status === "PENDING").length;
-  const revenueCatDeadCount = revenueCatDeadLetters.filter((item) => item.status === "DEAD_LETTER").length;
-  const revenueCatHighestRetryCount = revenueCatDeadLetters.reduce(
-    (max, item) => Math.max(max, item.retryCount),
-    0,
-  );
-  const revenueCatChartData = useMemo(
-    () =>
-      revenueCatDeadLetters.map((item) => ({
-        label: item.eventId.slice(0, 6),
-        retries: item.retryCount,
-      })),
-    [revenueCatDeadLetters],
-  );
-
-  if (googleBillingQuery.isLoading || revenueCatBillingQuery.isLoading) {
-    return <div className="flex items-center justify-center h-64 text-sm font-medium text-slate-500">Loading billing operations...</div>;
-  }
-
-  if (googleBillingQuery.error || revenueCatBillingQuery.error) {
-    return (
-      <div className="p-4 rounded-lg bg-red-50 text-red-600 border border-red-200">
-        {getApiErrorMessage(googleBillingQuery.error || revenueCatBillingQuery.error)}
-      </div>
-    );
-  }
+  const totalDead =
+    (googleQuery.data?.filter((d) => d.status === "DEAD_LETTER").length ?? 0) +
+    (rcQuery.data?.filter((d) => d.status === "DEAD_LETTER").length ?? 0);
+  const totalPending =
+    (googleQuery.data?.filter((d) => d.status === "PENDING").length ?? 0) +
+    (rcQuery.data?.filter((d) => d.status === "PENDING").length ?? 0);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          hint="Google billing dead letters in view"
-          icon={BarChart3}
-          label="Google tracked"
-          tone="default"
-          value={formatCompactNumber(googleDeadLetters.length)}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <Tile
+          label="Dead letters"
+          accent="rose"
+          icon={AlertOctagon}
+          value={formatCompactNumber(totalDead)}
+          hint="Across both providers"
         />
-        <StatCard
-          hint="Google events still eligible for auto-retry"
+        <Tile
+          label="Pending"
+          accent="amber"
           icon={Repeat2}
-          label="Google pending"
-          tone="mint"
-          value={formatCompactNumber(googlePendingCount)}
+          value={formatCompactNumber(totalPending)}
+          hint="Awaiting retry"
         />
-        <StatCard
-          hint="RevenueCat dead letters in view"
-          icon={BarChart3}
-          label="RevenueCat tracked"
-          tone="default"
-          value={formatCompactNumber(revenueCatDeadLetters.length)}
+        <Tile
+          label="Google events"
+          accent="indigo"
+          icon={CreditCard}
+          value={formatCompactNumber(googleQuery.data?.length ?? 0)}
+          hint="In filter window"
         />
-        <StatCard
-          hint="RevenueCat events still eligible for auto-retry"
-          icon={Repeat2}
-          label="RevenueCat pending"
-          tone="mint"
-          value={formatCompactNumber(revenueCatPendingCount)}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard
-          hint="Google events that exhausted recovery"
-          icon={AlertTriangle}
-          label="Google dead"
-          tone="rose"
-          value={formatCompactNumber(googleDeadCount)}
-        />
-        <StatCard
-          hint="Highest Google retry count in view"
-          icon={ShieldAlert}
-          label="Google max retries"
-          tone="amber"
-          value={formatCompactNumber(googleHighestRetryCount)}
-        />
-        <StatCard
-          hint="RevenueCat events that exhausted recovery"
-          icon={AlertTriangle}
-          label="RevenueCat dead"
-          tone="rose"
-          value={formatCompactNumber(revenueCatDeadCount)}
-        />
-        <StatCard
-          hint="Highest RevenueCat retry count in view"
-          icon={ShieldAlert}
-          label="RevenueCat max retries"
-          tone="amber"
-          value={formatCompactNumber(revenueCatHighestRetryCount)}
+        <Tile
+          label="RevenueCat"
+          accent="emerald"
+          icon={Apple}
+          value={formatCompactNumber(rcQuery.data?.length ?? 0)}
+          hint="In filter window"
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-        <Panel className="xl:col-span-2 flex flex-col">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <div className="text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">Google billing</div>
-              <h3 className="text-lg font-bold text-slate-800">Retry intensity across events</h3>
+      <Panel>
+        <SectionHead
+          eyebrow="Filter"
+          eyebrowIcon={ScrollText}
+          title="Billing event triage"
+          description="Filter and replay stuck or dead-lettered subscription events."
+          trailing={
+            <div className="inline-flex rounded-xl bg-slate-900 p-1 text-[11px] font-semibold text-slate-300 shadow-inner">
+              {(["ALL", "PENDING", "DEAD_LETTER"] as const).map((label) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setFilter(label)}
+                  className={`rounded-lg px-3 py-1.5 transition ${
+                    filter === label
+                      ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow"
+                      : "hover:text-white"
+                  }`}
+                >
+                  {label.replace("_", " ")}
+                </button>
+              ))}
             </div>
-          </div>
-          
-          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 mb-6">
-            {filters.map((filter) => (
-              <button
-                key={filter}
-                className={`flex-1 py-1.5 px-3 text-sm font-medium rounded-md transition-all ${
-                  googleStatusFilter === filter
-                    ? "bg-white text-indigo-700 shadow-sm border border-slate-200/50"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                }`}
-                onClick={() => setGoogleStatusFilter(filter)}
-                type="button"
-              >
-                {filter === "ALL" ? "All" : filter.replace("_", " ")}
-              </button>
-            ))}
-          </div>
+          }
+        />
+      </Panel>
 
-          <div className="flex-1 w-full min-h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={googleChartData}>
-                <CartesianGrid stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
-                <Tooltip
-                  contentStyle={{
-                    background: "#0f172a",
-                    color: "#f8fafc",
-                    borderRadius: '8px',
-                    border: 'none',
-                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                  }}
-                  cursor={{fill: '#f8fafc'}}
-                />
-                <Bar dataKey="retries" fill="#f43f5e" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
-
-        <Panel className="xl:col-span-3 flex flex-col overflow-hidden p-0">
-          <div className="p-6 border-b border-slate-200 shrink-0 bg-white">
-            <div>
-              <div className="text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">Google billing</div>
-              <h3 className="text-lg font-bold text-slate-800">Dead-letter events ready for replay</h3>
-            </div>
-          </div>
-
-          {googleReplayMutation.data ? (
-            <div className={`mx-6 mt-6 p-4 rounded-lg text-sm border font-medium ${
-              googleReplayMutation.data.recovered 
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                : "bg-amber-50 text-amber-700 border-amber-200"
-            }`}>
-              {googleReplayMutation.data.message}
-            </div>
-          ) : null}
-
-          <div className="flex-1 overflow-x-auto overflow-y-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Event</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Retries</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Updated</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
-                {googleDeadLetters.map((item) => (
-                  <tr key={item.eventId} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <strong className="block text-sm font-bold text-slate-900 mb-0.5">{item.productId}</strong>
-                      <span className="block text-xs text-slate-500">{item.notificationType} · {item.eventId.slice(0, 10)}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                        item.status === "PENDING" 
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                          : "bg-rose-50 text-rose-700 border-rose-200"
-                      }`}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-700 font-medium">
-                      {item.retryCount}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      {formatDateTime(item.updatedAt)}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-md transition-colors border border-slate-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={googleReplayMutation.isPending}
-                        onClick={() => googleReplayMutation.mutate(item.eventId)}
-                        type="button"
-                      >
-                        <RefreshCw size={14} className={googleReplayMutation.isPending && googleReplayMutation.variables === item.eventId ? "animate-spin text-indigo-600" : "text-slate-400"} />
-                        <span>Replay</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-        <Panel className="xl:col-span-2 flex flex-col">
-          <div className="flex items-start justify-between mb-6">
-            <div>
-              <div className="text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">RevenueCat billing</div>
-              <h3 className="text-lg font-bold text-slate-800">Retry intensity across events</h3>
-            </div>
-            <button
-              className="inline-flex items-center space-x-2 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-md transition-colors border border-slate-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={revenueCatCatalogSyncMutation.isPending}
-              onClick={() => revenueCatCatalogSyncMutation.mutate()}
-              type="button"
-            >
-              <RefreshCw size={14} className={revenueCatCatalogSyncMutation.isPending ? "animate-spin text-indigo-600" : "text-slate-400"} />
-              <span>Sync catalog</span>
-            </button>
-          </div>
-
-          {revenueCatCatalogSyncMutation.data ? (
-            <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-              Updated {revenueCatCatalogSyncMutation.data.plansUpdated} plans, missed {revenueCatCatalogSyncMutation.data.plansMissed}.
-            </div>
-          ) : null}
-
-          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 mb-6">
-            {filters.map((filter) => (
-              <button
-                key={`rc-${filter}`}
-                className={`flex-1 py-1.5 px-3 text-sm font-medium rounded-md transition-all ${
-                  revenueCatStatusFilter === filter
-                    ? "bg-white text-indigo-700 shadow-sm border border-slate-200/50"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                }`}
-                onClick={() => setRevenueCatStatusFilter(filter)}
-                type="button"
-              >
-                {filter === "ALL" ? "All" : filter.replace("_", " ")}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex-1 w-full min-h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenueCatChartData}>
-                <CartesianGrid stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
-                <Tooltip
-                  contentStyle={{
-                    background: "#0f172a",
-                    color: "#f8fafc",
-                    borderRadius: "8px",
-                    border: "none",
-                    boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
-                  }}
-                  cursor={{ fill: "#f8fafc" }}
-                />
-                <Bar dataKey="retries" fill="#0f766e" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
-
-        <Panel className="xl:col-span-3 flex flex-col overflow-hidden p-0">
-          <div className="p-6 border-b border-slate-200 shrink-0 bg-white">
-            <div>
-              <div className="text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">RevenueCat billing</div>
-              <h3 className="text-lg font-bold text-slate-800">Dead-letter events and catalog actions</h3>
-            </div>
-          </div>
-
-          {revenueCatReplayMutation.data ? (
-            <div className={`mx-6 mt-6 p-4 rounded-lg text-sm border font-medium ${
-              revenueCatReplayMutation.data.replayed
-                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                : "bg-amber-50 text-amber-700 border-amber-200"
-            }`}>
-              {revenueCatReplayMutation.data.message}
-            </div>
-          ) : null}
-
-          <div className="flex-1 overflow-x-auto overflow-y-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Event</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Entitlement</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Retries</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Updated</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
-                {revenueCatDeadLetters.map((item) => (
-                  <tr key={item.eventId} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <strong className="block text-sm font-bold text-slate-900 mb-0.5">
-                        {item.productId || item.eventType}
-                      </strong>
-                      <span className="block text-xs text-slate-500">
-                        {item.eventType} · {item.eventId.slice(0, 10)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-700">
-                      {item.entitlementId || "Unmapped"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                        item.status === "PENDING"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-rose-50 text-rose-700 border-rose-200"
-                      }`}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-700 font-medium">
-                      {item.retryCount}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
-                      {formatDateTime(item.updatedAt)}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-md transition-colors border border-slate-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={revenueCatReplayMutation.isPending}
-                        onClick={() => revenueCatReplayMutation.mutate(item.eventId)}
-                        type="button"
-                      >
-                        <RefreshCw
-                          size={14}
-                          className={
-                            revenueCatReplayMutation.isPending &&
-                            revenueCatReplayMutation.variables === item.eventId
-                              ? "animate-spin text-indigo-600"
-                              : "text-slate-400"
-                          }
-                        />
-                        <span>Replay</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <GooglePanel query={googleQuery} />
+        <RevenueCatPanel query={rcQuery} />
       </div>
     </div>
+  );
+}
+
+function GooglePanel({
+  query,
+}: {
+  query: ReturnType<
+    typeof useQuery<Awaited<ReturnType<typeof getBillingDeadLetters>>>
+  >;
+}) {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = useState<string | null>(null);
+  const replay = useMutation({
+    mutationFn: replayBillingDeadLetter,
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: ["admin", "billing", "google"],
+      }),
+    onSettled: () => setPending(null),
+  });
+
+  return (
+    <Panel className="p-0">
+      <div className="border-b border-slate-200/70 p-6">
+        <SectionHead
+          eyebrow="Google Play"
+          eyebrowIcon={CreditCard}
+          title="Play Billing dead letters"
+          description="RTDN events that failed downstream processing."
+        />
+      </div>
+      {query.isLoading ? (
+        <div className="p-6">
+          <LoadingShell label="Loading Google events…" />
+        </div>
+      ) : query.error ? (
+        <div className="p-6">
+          <ErrorShell message={getApiErrorMessage(query.error)} />
+        </div>
+      ) : (query.data ?? []).length === 0 ? (
+        <div className="p-6">
+          <EmptyShell
+            title="No Google events"
+            description="Everything is clean in this filter window."
+          />
+        </div>
+      ) : (
+        <ul className="max-h-[34rem] divide-y divide-slate-100 overflow-y-auto">
+          {(query.data ?? []).map((event) => (
+            <li
+              key={event.eventId}
+              className="px-6 py-4 transition-colors hover:bg-indigo-50/40"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Pill variant={pillFor(event.status)}>{event.status}</Pill>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      {event.notificationType}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 truncate font-mono text-xs font-semibold text-slate-900">
+                    {event.productId}{" "}
+                    {event.basePlanId ? `· ${event.basePlanId}` : ""}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">
+                    Retries {event.retryCount} ·{" "}
+                    {formatDateTime(event.updatedAt)}
+                  </div>
+                  {event.lastError ? (
+                    <div className="mt-2 rounded-lg border border-rose-100 bg-rose-50/70 px-3 py-2 text-[11px] font-medium text-rose-700">
+                      {event.lastError}
+                    </div>
+                  ) : null}
+                </div>
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  type="button"
+                  disabled={pending === event.eventId && replay.isPending}
+                  onClick={() => {
+                    setPending(event.eventId);
+                    replay.mutate(event.eventId);
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-sky-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow transition hover:shadow-md disabled:opacity-60"
+                >
+                  <Repeat2 size={12} />
+                  Replay
+                </motion.button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function RevenueCatPanel({
+  query,
+}: {
+  query: ReturnType<
+    typeof useQuery<Awaited<ReturnType<typeof getRevenueCatBillingDeadLetters>>>
+  >;
+}) {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = useState<string | null>(null);
+  const replay = useMutation({
+    mutationFn: replayRevenueCatBillingDeadLetter,
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["admin", "billing", "rc"] }),
+    onSettled: () => setPending(null),
+  });
+  const sync = useMutation({
+    mutationFn: syncRevenueCatCatalog,
+  });
+
+  return (
+    <Panel className="p-0">
+      <div className="border-b border-slate-200/70 p-6">
+        <SectionHead
+          eyebrow="RevenueCat"
+          eyebrowIcon={Apple}
+          eyebrowTone="emerald"
+          title="RevenueCat dead letters"
+          description="Cross-platform billing events that failed delivery."
+          trailing={
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              type="button"
+              disabled={sync.isPending}
+              onClick={() => sync.mutate()}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-60"
+            >
+              <RefreshCw
+                size={12}
+                className={sync.isPending ? "animate-spin" : ""}
+              />
+              {sync.isPending ? "Syncing…" : "Sync catalog"}
+            </motion.button>
+          }
+        />
+        {sync.data ? (
+          <div className="mt-3 rounded-xl border border-emerald-200/70 bg-emerald-50/70 px-3 py-2 text-[11px] font-semibold text-emerald-700">
+            Updated {sync.data.plansUpdated} · Missed {sync.data.plansMissed}
+          </div>
+        ) : null}
+      </div>
+      {query.isLoading ? (
+        <div className="p-6">
+          <LoadingShell label="Loading RevenueCat events…" />
+        </div>
+      ) : query.error ? (
+        <div className="p-6">
+          <ErrorShell message={getApiErrorMessage(query.error)} />
+        </div>
+      ) : (query.data ?? []).length === 0 ? (
+        <div className="p-6">
+          <EmptyShell
+            title="No RevenueCat events"
+            description="Everything is clean in this filter window."
+          />
+        </div>
+      ) : (
+        <ul className="max-h-[34rem] divide-y divide-slate-100 overflow-y-auto">
+          {(query.data ?? []).map((event) => (
+            <li
+              key={event.eventId}
+              className="px-6 py-4 transition-colors hover:bg-indigo-50/40"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Pill variant={pillFor(event.status)}>{event.status}</Pill>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      {event.eventType}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 truncate font-mono text-xs font-semibold text-slate-900">
+                    {event.appUserId}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-slate-500">
+                    {event.productId ?? "—"} · Retries {event.retryCount} ·{" "}
+                    {formatDateTime(event.updatedAt)}
+                  </div>
+                  {event.lastError ? (
+                    <div className="mt-2 rounded-lg border border-rose-100 bg-rose-50/70 px-3 py-2 text-[11px] font-medium text-rose-700">
+                      {event.lastError}
+                    </div>
+                  ) : null}
+                </div>
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  type="button"
+                  disabled={pending === event.eventId && replay.isPending}
+                  onClick={() => {
+                    setPending(event.eventId);
+                    replay.mutate(event.eventId);
+                  }}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow transition hover:shadow-md disabled:opacity-60"
+                >
+                  <Repeat2 size={12} />
+                  Replay
+                </motion.button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }

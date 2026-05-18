@@ -1,36 +1,69 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ShieldAlert, TimerReset, Waves } from "lucide-react";
+import {
+  Fingerprint,
+  Globe2,
+  ShieldAlert,
+  TimerReset,
+  Waves,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-import { getApiErrorMessage, getGuestUsage } from "../lib/api";
-import { formatCompactNumber, formatDateTime } from "../lib/format";
 import { Panel } from "../components/panel";
 import { StatCard } from "../components/stat-card";
+import {
+  EmptyShell,
+  ErrorShell,
+  LoadingShell,
+  Pill,
+  SectionHead,
+  chartTheme,
+} from "../components/ui";
+import { getApiErrorMessage, getGuestUsage } from "../lib/api";
+import { formatCompactNumber, formatDateTime } from "../lib/format";
+
+const palette = [
+  chartTheme.palette.indigo,
+  chartTheme.palette.violet,
+  chartTheme.palette.emerald,
+  chartTheme.palette.amber,
+  chartTheme.palette.rose,
+  chartTheme.palette.sky,
+];
 
 export function GuestUsagePage() {
   const guestQuery = useQuery({
     queryKey: ["admin", "guest-usage"],
     queryFn: () => getGuestUsage(14),
+    refetchInterval: 30_000,
   });
 
   if (guestQuery.isLoading) {
-    return <div className="flex items-center justify-center h-64 text-sm font-medium text-slate-500">Loading guest shield analytics...</div>;
+    return <LoadingShell label="Loading guest shield analytics…" />;
   }
-
   if (guestQuery.error || !guestQuery.data) {
-    return <div className="p-4 rounded-lg bg-red-50 text-red-600 border border-red-200">{getApiErrorMessage(guestQuery.error)}</div>;
+    return <ErrorShell message={getApiErrorMessage(guestQuery.error)} />;
   }
 
-  const buckets = guestQuery.data.hottestBuckets.map((item) => ({
-    name: `${item.bucketType}-${item.fingerprintPrefix.slice(0, 6)}`,
+  const buckets = guestQuery.data.hottestBuckets.map((item, index) => ({
+    name: `${item.bucketType.slice(0, 1)}·${item.fingerprintPrefix.slice(0, 6)}`,
     count: item.requestCount,
+    color: palette[index % palette.length],
   }));
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
         <StatCard
-          hint="Minute-scoped rate-limit buckets alive"
+          hint="Minute-scoped rate-limit buckets currently alive"
           icon={Waves}
           label="Active minute buckets"
           tone="default"
@@ -44,82 +77,131 @@ export function GuestUsagePage() {
           value={formatCompactNumber(guestQuery.data.activeDayBuckets)}
         />
         <StatCard
-          hint="Summed from minute buckets over trailing 24h"
+          hint="Summed across minute buckets over trailing 24h"
           icon={ShieldAlert}
-          label="Guest requests in 24h"
+          label="Guest requests 24h"
           tone="rose"
           value={formatCompactNumber(guestQuery.data.requestsLast24Hours)}
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <Panel className="flex flex-col">
-          <div className="mb-6">
-            <div className="text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">Hot fingerprints</div>
-            <h3 className="text-lg font-bold text-slate-800">Buckets driving the most guest load</h3>
-          </div>
-
-          <div className="w-full flex-1 min-h-[300px] mb-2">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={buckets}>
-                <CartesianGrid stroke="#f1f5f9" vertical={false} />
-                <XAxis dataKey="name" stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
-                <YAxis stroke="#64748b" tickLine={false} axisLine={false} fontSize={12} />
-                <Tooltip
-                  contentStyle={{
-                    background: "#0f172a",
-                    color: "#f8fafc",
-                    borderRadius: '8px',
-                    border: 'none',
-                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                  }}
-                  cursor={{fill: '#f8fafc'}}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+        <Panel>
+          <SectionHead
+            eyebrow="Edge load"
+            eyebrowIcon={Fingerprint}
+            eyebrowTone="amber"
+            title="Hottest guest fingerprints"
+            description="Tall bars indicate either a viral surge or an abuse signal worth investigating."
+          />
+          <div className="mt-6 h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={buckets} margin={{ left: 4, right: 4, top: 8 }}>
+                <CartesianGrid
+                  stroke={chartTheme.grid}
+                  vertical={false}
+                  strokeDasharray="3 3"
                 />
-                <Bar dataKey="count" fill="#4f46e5" radius={[6, 6, 0, 0]} />
+                <XAxis
+                  dataKey="name"
+                  stroke={chartTheme.axis}
+                  tickLine={false}
+                  axisLine={false}
+                  fontSize={11}
+                  interval={0}
+                  angle={-20}
+                  dy={8}
+                />
+                <YAxis
+                  stroke={chartTheme.axis}
+                  tickLine={false}
+                  axisLine={false}
+                  fontSize={chartTheme.axisFont}
+                />
+                <Tooltip
+                  contentStyle={chartTheme.darkTooltip}
+                  cursor={{ fill: "rgba(99,102,241,0.08)" }}
+                />
+                <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                  {buckets.map((entry, index) => (
+                    <Cell key={index} fill={entry.color} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Panel>
 
-        <Panel className="flex flex-col overflow-hidden p-0">
-          <div className="p-6 border-b border-slate-200 shrink-0 bg-white">
-            <div className="text-xs font-semibold text-indigo-600 tracking-wider uppercase mb-1">Bucket detail</div>
-            <h3 className="text-lg font-bold text-slate-800">Most active recent guest signatures</h3>
+        <Panel className="p-0">
+          <div className="border-b border-slate-200/70 p-6">
+            <SectionHead
+              eyebrow="Bucket detail"
+              eyebrowIcon={Globe2}
+              title="Most active recent signatures"
+              description="Use the fingerprint and window start to triage repeat offenders."
+            />
           </div>
 
-          <div className="flex-1 overflow-x-auto overflow-y-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Fingerprint</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Requests</th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider pt-3 pb-3">Updated</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-slate-100">
-                {guestQuery.data.hottestBuckets.map((bucket) => (
-                  <tr key={`${bucket.bucketType}-${bucket.fingerprintPrefix}-${bucket.windowStart}`} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <strong className="block text-sm font-bold text-slate-900 mb-0.5">{bucket.fingerprintPrefix}</strong>
-                      <span className="block text-xs text-slate-500">{formatDateTime(bucket.windowStart)}</span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border bg-slate-100 text-slate-600 border-slate-200">
-                        {bucket.bucketType}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-bold text-slate-900">{formatCompactNumber(bucket.requestCount)}</span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500 font-medium">
-                      {formatDateTime(bucket.updatedAt)}
-                    </td>
+          {guestQuery.data.hottestBuckets.length === 0 ? (
+            <div className="p-6">
+              <EmptyShell
+                title="No buckets active"
+                description="Nothing is currently hitting guest endpoints hard."
+              />
+            </div>
+          ) : (
+            <div className="max-h-[26rem] overflow-y-auto">
+              <table className="w-full border-collapse text-left">
+                <thead className="sticky top-0 z-10 bg-slate-900 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300">
+                  <tr>
+                    <th className="px-6 py-3">Fingerprint</th>
+                    <th className="px-6 py-3">Type</th>
+                    <th className="px-6 py-3">Requests</th>
+                    <th className="px-6 py-3">Updated</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {guestQuery.data.hottestBuckets.map((bucket) => (
+                    <tr
+                      key={`${bucket.bucketType}-${bucket.fingerprintPrefix}-${bucket.windowStart}`}
+                      className="transition-colors hover:bg-indigo-50/40"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <Fingerprint size={14} className="text-indigo-500" />
+                          <div>
+                            <div className="font-mono text-xs font-semibold text-slate-900">
+                              {bucket.fingerprintPrefix}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">
+                              window {formatDateTime(bucket.windowStart)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Pill
+                          variant={
+                            bucket.bucketType === "MINUTE" ? "sky" : "violet"
+                          }
+                        >
+                          {bucket.bucketType}
+                        </Pill>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-heading text-sm font-bold text-slate-900">
+                          {formatCompactNumber(bucket.requestCount)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-xs font-medium text-slate-500">
+                        {formatDateTime(bucket.updatedAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Panel>
       </div>
     </div>
