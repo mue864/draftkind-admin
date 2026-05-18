@@ -44,6 +44,82 @@ export interface AdminTrendPoint {
   guestRequests: number;
 }
 
+export interface AdminActivityMinutePoint {
+  minuteStart: string;
+  rewriteRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  pendingRequests: number;
+  guestRequests: number;
+}
+
+export interface AdminFailureSignal {
+  message: string;
+  occurrences: number;
+  latestAt: string;
+}
+
+export interface AdminInfrastructureSnapshot {
+  dbPoolMaxConnections: number | null;
+  dbPoolTotalConnections: number | null;
+  dbPoolActiveConnections: number | null;
+  dbPoolIdleConnections: number | null;
+  dbPoolAwaitingConnections: number | null;
+  dbPoolUsagePercent: number;
+  dbQueuePressurePercent: number;
+  heapUsedMegabytes: number;
+  heapMaxMegabytes: number;
+  heapUsagePercent: number;
+  processCpuUsagePercent: number;
+  systemCpuUsagePercent: number;
+  httpRequestCount: number;
+  httpMeanLatencyMillis: number;
+  httpP95LatencyMillis: number;
+}
+
+export interface AdminTrendDelta {
+  key: string;
+  label: string;
+  currentValue: number;
+  previousValue: number;
+  changePercent: number;
+}
+
+export interface AdminIncidentAlert {
+  key: string;
+  severity: string;
+  title: string;
+  summary: string;
+  suggestedAction: string;
+}
+
+export interface AdminLiveActivitySnapshot {
+  capturedAt: string;
+  totalRequestsLast5Minutes: number;
+  rewriteRequestsLast5Minutes: number;
+  rewriteRequestsLast15Minutes: number;
+  failedRequestsLast15Minutes: number;
+  failureRateLast15Minutes: number;
+  pendingRequests: number;
+  stalePendingRequests: number;
+  guestRequestsLast5Minutes: number;
+  guestMinuteWindowRequests: number;
+  activeGuestMinuteBuckets: number;
+  totalTokensLast15Minutes: number;
+  geminiConcurrencyLimit: number | null;
+  concurrencyPressurePercent: number;
+  guestPressurePercent: number;
+  pressureScore: number;
+  pressureLevel: string;
+  pressureSummary: string;
+  infrastructure: AdminInfrastructureSnapshot;
+  trendDeltas: AdminTrendDelta[];
+  incidentAlerts: AdminIncidentAlert[];
+  minuteSeries: AdminActivityMinutePoint[];
+  recentFailureSignals: AdminFailureSignal[];
+  hotGuestBuckets: AdminGuestBucket[];
+}
+
 export interface AdminPlanCatalog {
   id: number;
   name: string;

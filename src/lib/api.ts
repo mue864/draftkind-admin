@@ -2,6 +2,7 @@ import axios, { AxiosError } from "axios";
 
 import type {
   AdminGuestUsage,
+  AdminLiveActivitySnapshot,
   AdminOverview,
   AdminPlanCatalog,
   AdminRecentRewrite,
@@ -69,7 +70,10 @@ export function isUnauthorized(error: unknown) {
 }
 
 export async function login(email: string, password: string) {
-  const response = await api.post<AuthResponse>("/auth/login", { email, password });
+  const response = await api.post<AuthResponse>("/auth/login", {
+    email,
+    password,
+  });
   return response.data;
 }
 
@@ -83,6 +87,13 @@ export async function getTrends(days = 14) {
     params: { days },
   });
 
+  return response.data;
+}
+
+export async function getLiveActivitySnapshot() {
+  const response = await api.get<AdminLiveActivitySnapshot>(
+    "/admin/live-activity",
+  );
   return response.data;
 }
 
@@ -108,9 +119,12 @@ export async function getUserDetail(userId: string) {
 }
 
 export async function getRecentRewrites(limit = 32) {
-  const response = await api.get<AdminRecentRewrite[]>("/admin/rewrites/recent", {
-    params: { limit },
-  });
+  const response = await api.get<AdminRecentRewrite[]>(
+    "/admin/rewrites/recent",
+    {
+      params: { limit },
+    },
+  );
 
   return response.data;
 }
@@ -124,7 +138,9 @@ export async function getGuestUsage(limit = 12) {
 }
 
 export async function deactivatePlan(planId: number) {
-  const response = await api.put<AdminPlanCatalog>(`/subscriptions/admin/plans/${planId}/deactivate`);
+  const response = await api.put<AdminPlanCatalog>(
+    `/subscriptions/admin/plans/${planId}/deactivate`,
+  );
   return response.data;
 }
 
@@ -148,7 +164,10 @@ export async function replayBillingDeadLetter(eventId: string) {
   return response.data;
 }
 
-export async function getRevenueCatBillingDeadLetters(limit = 20, status?: string) {
+export async function getRevenueCatBillingDeadLetters(
+  limit = 20,
+  status?: string,
+) {
   const response = await api.get<RevenueCatBillingDeadLetter[]>(
     "/subscriptions/admin/revenuecat-billing/dead-letters",
     {
