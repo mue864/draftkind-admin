@@ -557,7 +557,7 @@ function UserDetailView({
 
 function OptionChipGroup<T extends string | number>({
   value,
-  options,[]
+  options,
   onChange,
 }: {
   value: T;
