@@ -20,14 +20,16 @@ import {
   Wifi,
   Zap,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
-  Area,
   Bar,
+  BarChart,
   CartesianGrid,
   ComposedChart,
   Legend,
   Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -54,11 +56,22 @@ import {
   getTrends,
 } from "../lib/api";
 import {
+  formatAdminProviderLabel,
   formatCompactNumber,
   formatDateTime,
   formatPercent,
   formatShortDate,
+  normalizeAdminProvider,
 } from "../lib/format";
+
+const LIVE_WINDOW_OPTIONS = [
+  { label: "1h", value: 60 },
+  { label: "3h", value: 180 },
+  { label: "12h", value: 720 },
+  { label: "24h", value: 1440 },
+] as const;
+
+const TREND_WINDOW_OPTIONS = [7, 14, 30, 90] as const;
 
 const pressureVariant: Record<string, PillVariant> = {
   CALM: "emerald",
@@ -80,20 +93,49 @@ const statusVariant: Record<string, PillVariant> = {
   FAILED: "rose",
 };
 
+const providerVariant: Record<string, PillVariant> = {
+  openai: "emerald",
+  gemini: "indigo",
+  unknown: "neutral",
+};
+
+type ProviderMetric = {
+  provider: string;
+  requestCount: number;
+  successfulRequests: number;
+  failedRequests: number;
+  totalTokens: number;
+};
+
+function emptyProviderMetric(provider: string): ProviderMetric {
+  return {
+    provider,
+    requestCount: 0,
+    successfulRequests: 0,
+    failedRequests: 0,
+    totalTokens: 0,
+  };
+}
+
 export function OverviewPage() {
+  const [liveWindowMinutes, setLiveWindowMinutes] =
+    useState<(typeof LIVE_WINDOW_OPTIONS)[number]["value"]>(60);
+  const [trendDays, setTrendDays] =
+    useState<(typeof TREND_WINDOW_OPTIONS)[number]>(14);
+
   const overviewQuery = useQuery({
     queryKey: ["admin", "overview"],
     queryFn: getOverview,
     refetchInterval: 30_000,
   });
   const trendsQuery = useQuery({
-    queryKey: ["admin", "trends"],
-    queryFn: () => getTrends(14),
+    queryKey: ["admin", "trends", trendDays],
+    queryFn: () => getTrends(trendDays),
     refetchInterval: 60_000,
   });
   const liveQuery = useQuery({
-    queryKey: ["admin", "live-activity"],
-    queryFn: getLiveActivitySnapshot,
+    queryKey: ["admin", "live-activity", liveWindowMinutes],
+    queryFn: () => getLiveActivitySnapshot(liveWindowMinutes),
     refetchInterval: 15_000,
   });
   const rewritesQuery = useQuery({
@@ -102,7 +144,7 @@ export function OverviewPage() {
     refetchInterval: 20_000,
   });
 
-  const minuteSeries = useMemo(() => {
+  const pressureSeries = useMemo(() => {
     return (liveQuery.data?.minuteSeries ?? []).map((point) => ({
       label: new Date(point.minuteStart).toLocaleTimeString("en-US", {
         hour: "numeric",
@@ -111,17 +153,104 @@ export function OverviewPage() {
       success: point.successfulRequests,
       failed: point.failedRequests,
       guests: point.guestRequests,
+      pending: point.pendingRequests,
+      rewriteRequests: point.rewriteRequests,
+      totalTraffic: point.rewriteRequests + point.guestRequests,
+      failureRatePercent:
+        point.rewriteRequests > 0
+          ? (point.failedRequests / point.rewriteRequests) * 100
+          : 0,
+      guestSharePercent:
+        point.rewriteRequests + point.guestRequests > 0
+          ? (point.guestRequests /
+              (point.rewriteRequests + point.guestRequests)) *
+            100
+          : 0,
     }));
   }, [liveQuery.data]);
+
+  const pressureHighlights = useMemo(() => {
+    function peakBy(key: "success" | "failed" | "guests" | "totalTraffic") {
+      return pressureSeries.reduce<(typeof pressureSeries)[number] | null>(
+        (current, point) => {
+          if (!current || point[key] > current[key]) {
+            return point;
+          }
+
+          return current;
+        },
+        null,
+      );
+    }
+
+    return {
+      peakSuccess: peakBy("success"),
+      peakFailed: peakBy("failed"),
+      peakGuests: peakBy("guests"),
+      peakTraffic: peakBy("totalTraffic"),
+      latest: pressureSeries[pressureSeries.length - 1] ?? null,
+    };
+  }, [pressureSeries]);
 
   const trendChart = useMemo(() => {
     return (trendsQuery.data ?? []).map((point) => ({
       day: formatShortDate(point.day),
+      fullDay: point.day,
       newUsers: point.newUsers,
       rewrites: point.rewrites,
       failed: point.failedRewrites,
+      failureRatePercent:
+        point.rewrites > 0 ? (point.failedRewrites / point.rewrites) * 100 : 0,
     }));
   }, [trendsQuery.data]);
+
+  const providerUsage = useMemo(() => {
+    const grouped = new Map<string, ProviderMetric>();
+
+    for (const item of liveQuery.data?.providerUsage ?? []) {
+      const provider = normalizeAdminProvider(item.provider);
+      const current = grouped.get(provider) ?? emptyProviderMetric(provider);
+
+      current.requestCount += item.requestCount;
+      current.successfulRequests += item.successfulRequests;
+      current.failedRequests += item.failedRequests;
+      current.totalTokens += item.totalTokens;
+
+      grouped.set(provider, current);
+    }
+
+    const openai = grouped.get("openai") ?? emptyProviderMetric("openai");
+    const gemini = grouped.get("gemini") ?? emptyProviderMetric("gemini");
+    const other = Array.from(grouped.values())
+      .filter(
+        (item) => item.provider !== "openai" && item.provider !== "gemini",
+      )
+      .reduce(
+        (aggregate, item) => ({
+          provider: "other",
+          requestCount: aggregate.requestCount + item.requestCount,
+          successfulRequests:
+            aggregate.successfulRequests + item.successfulRequests,
+          failedRequests: aggregate.failedRequests + item.failedRequests,
+          totalTokens: aggregate.totalTokens + item.totalTokens,
+        }),
+        emptyProviderMetric("other"),
+      );
+
+    const ordered = Array.from(grouped.values()).sort(
+      (left, right) =>
+        right.totalTokens - left.totalTokens ||
+        right.requestCount - left.requestCount ||
+        left.provider.localeCompare(right.provider),
+    );
+
+    return {
+      openai,
+      gemini,
+      other,
+      ordered,
+    };
+  }, [liveQuery.data]);
 
   if (overviewQuery.isLoading || liveQuery.isLoading || trendsQuery.isLoading) {
     return <LoadingShell label="Initialising console…" />;
@@ -135,6 +264,11 @@ export function OverviewPage() {
 
   const overview = overviewQuery.data;
   const live = liveQuery.data;
+  const providerTokensInWindow = providerUsage.ordered.reduce(
+    (sum, item) => sum + item.totalTokens,
+    0,
+  );
+  const liveWindowLabel = formatLiveWindowLabel(live.seriesWindowMinutes);
 
   return (
     <div className="space-y-6">
@@ -172,6 +306,91 @@ export function OverviewPage() {
         />
       </div>
 
+      <Panel>
+        <SectionHead
+          eyebrow="Provider burn"
+          eyebrowIcon={Sparkles}
+          eyebrowTone="amber"
+          title="OpenAI vs Gemini token usage"
+          description={`Provider usage across the selected live window of ${liveWindowLabel}, grouped by token burn and request volume.`}
+          trailing={
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <RangeChipGroup
+                value={liveWindowMinutes}
+                options={LIVE_WINDOW_OPTIONS.map((option) => ({
+                  label: option.label,
+                  value: option.value,
+                }))}
+                onChange={(value) =>
+                  setLiveWindowMinutes(
+                    value as (typeof LIVE_WINDOW_OPTIONS)[number]["value"],
+                  )
+                }
+              />
+              <Pill variant="ink">
+                Captured {formatDateTime(live.capturedAt)}
+              </Pill>
+            </div>
+          }
+        />
+
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <Tile
+            label="OpenAI"
+            accent="emerald"
+            icon={Sparkles}
+            value={formatCompactNumber(providerUsage.openai.totalTokens)}
+            hint={`${formatCompactNumber(providerUsage.openai.requestCount)} requests · ${formatCompactNumber(providerUsage.openai.failedRequests)} failed`}
+          />
+          <Tile
+            label="Gemini"
+            accent="indigo"
+            icon={Cpu}
+            value={formatCompactNumber(providerUsage.gemini.totalTokens)}
+            hint={`${formatCompactNumber(providerUsage.gemini.requestCount)} requests · ${formatCompactNumber(providerUsage.gemini.failedRequests)} failed`}
+          />
+          <Tile
+            label="All providers"
+            accent="amber"
+            icon={Database}
+            value={formatCompactNumber(providerTokensInWindow)}
+            hint={`${formatCompactNumber(providerUsage.ordered.reduce((sum, item) => sum + item.requestCount, 0))} requests across ${liveWindowLabel}`}
+          />
+        </div>
+
+        {providerUsage.ordered.length > 0 ? (
+          <div className="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+            {providerUsage.ordered.map((item) => (
+              <div
+                key={item.provider}
+                className="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <Pill
+                    variant={providerVariant[item.provider] ?? "sky"}
+                    icon={Database}
+                  >
+                    {formatAdminProviderLabel(item.provider)}
+                  </Pill>
+                  <span className="font-heading text-lg font-bold text-slate-900">
+                    {formatCompactNumber(item.totalTokens)}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-medium text-slate-500">
+                  <span>{formatCompactNumber(item.requestCount)} requests</span>
+                  <span>•</span>
+                  <span>
+                    {formatCompactNumber(item.successfulRequests)} success
+                  </span>
+                  <span>•</span>
+                  <span>{formatCompactNumber(item.failedRequests)} failed</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Panel>
+
       {/* Pressure chart + infra */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr_1fr]">
         <Panel>
@@ -179,82 +398,289 @@ export function OverviewPage() {
             eyebrow="Live pressure"
             eyebrowIcon={Flame}
             eyebrowTone="rose"
-            title="Last 60 minutes"
-            description="Successful vs. failed requests, with guest traffic plotted as the line series."
+            title={`Live pressure over ${liveWindowLabel}`}
+            description="Split into volume and rate views so large success bursts do not flatten failures or guest traffic."
             trailing={
-              <Pill
-                variant={pressureVariant[live.pressureLevel] ?? "neutral"}
-                icon={Gauge}
-              >
-                {live.pressureLevel} · {live.pressureScore.toFixed(0)}
-              </Pill>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <RangeChipGroup
+                  value={liveWindowMinutes}
+                  options={LIVE_WINDOW_OPTIONS.map((option) => ({
+                    label: option.label,
+                    value: option.value,
+                  }))}
+                  onChange={(value) =>
+                    setLiveWindowMinutes(
+                      value as (typeof LIVE_WINDOW_OPTIONS)[number]["value"],
+                    )
+                  }
+                />
+                <Pill
+                  variant={pressureVariant[live.pressureLevel] ?? "neutral"}
+                  icon={Gauge}
+                >
+                  {live.pressureLevel} · {live.pressureScore.toFixed(0)}
+                </Pill>
+              </div>
             }
           />
-          <div className="mt-6 h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={minuteSeries}>
-                <defs>
-                  <linearGradient id="successGrad" x1="0" x2="0" y1="0" y2="1">
-                    <stop
-                      offset="0%"
-                      stopColor={chartTheme.palette.indigo}
-                      stopOpacity={0.5}
+          <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <Tile
+              accent="indigo"
+              icon={Activity}
+              label="Peak success / min"
+              value={formatCompactNumber(
+                pressureHighlights.peakSuccess?.success ?? 0,
+              )}
+              hint={
+                pressureHighlights.peakSuccess
+                  ? `At ${pressureHighlights.peakSuccess.label}`
+                  : "No successful traffic yet"
+              }
+            />
+            <Tile
+              accent="rose"
+              icon={AlertTriangle}
+              label="Peak failed / min"
+              value={formatCompactNumber(
+                pressureHighlights.peakFailed?.failed ?? 0,
+              )}
+              hint={
+                pressureHighlights.peakFailed
+                  ? `At ${pressureHighlights.peakFailed.label}`
+                  : "No failures in the window"
+              }
+            />
+            <Tile
+              accent="amber"
+              icon={Globe2}
+              label="Peak guest / min"
+              value={formatCompactNumber(
+                pressureHighlights.peakGuests?.guests ?? 0,
+              )}
+              hint={
+                pressureHighlights.peakGuests
+                  ? `At ${pressureHighlights.peakGuests.label}`
+                  : "No guest traffic yet"
+              }
+            />
+            <Tile
+              accent="emerald"
+              icon={Clock}
+              label="Latest minute"
+              value={formatCompactNumber(
+                pressureHighlights.latest?.totalTraffic ?? 0,
+              )}
+              hint={
+                pressureHighlights.latest
+                  ? `${pressureHighlights.latest.failureRatePercent.toFixed(1)}% failed · ${pressureHighlights.latest.guestSharePercent.toFixed(1)}% guest share`
+                  : "Awaiting fresh traffic"
+              }
+            />
+          </div>
+
+          <div className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+            <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="font-heading text-base font-bold text-slate-900">
+                    Request volume per minute
+                  </h4>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Absolute request counts for successful, failed, and guest
+                    traffic.
+                  </p>
+                </div>
+                <Pill variant="neutral">Counts</Pill>
+              </div>
+
+              <div className="mt-4 h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={pressureSeries}>
+                    <CartesianGrid
+                      stroke={chartTheme.grid}
+                      vertical={false}
+                      strokeDasharray="3 3"
                     />
-                    <stop
-                      offset="100%"
-                      stopColor={chartTheme.palette.indigo}
-                      stopOpacity={0.02}
+                    <XAxis
+                      dataKey="label"
+                      stroke={chartTheme.axis}
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      minTickGap={28}
                     />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  stroke={chartTheme.grid}
-                  vertical={false}
-                  strokeDasharray="3 3"
-                />
-                <XAxis
-                  dataKey="label"
-                  stroke={chartTheme.axis}
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  minTickGap={32}
-                />
-                <YAxis
-                  stroke={chartTheme.axis}
-                  fontSize={chartTheme.axisFont}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip contentStyle={chartTheme.tooltip} />
-                <Legend
-                  wrapperStyle={{ fontSize: 11, color: chartTheme.axis }}
-                  iconType="circle"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="success"
-                  name="Success"
-                  stroke={chartTheme.palette.indigo}
-                  strokeWidth={2.5}
-                  fill="url(#successGrad)"
-                />
-                <Bar
-                  dataKey="failed"
-                  name="Failed"
-                  fill={chartTheme.palette.rose}
-                  radius={[6, 6, 0, 0]}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="guests"
-                  name="Guests"
-                  stroke={chartTheme.palette.amber}
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+                    <YAxis
+                      stroke={chartTheme.axis}
+                      fontSize={chartTheme.axisFont}
+                      tickLine={false}
+                      axisLine={false}
+                      label={{
+                        value: "Requests / min",
+                        angle: -90,
+                        position: "insideLeft",
+                        style: { fill: chartTheme.axis, fontSize: 12 },
+                      }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: "rgba(99, 102, 241, 0.06)" }}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) {
+                          return null;
+                        }
+
+                        const rows = payload
+                          .filter((entry) => Number(entry.value ?? 0) > 0)
+                          .map((entry) => ({
+                            label: String(entry.name ?? "Series"),
+                            value: formatCompactNumber(
+                              Number(entry.value ?? 0),
+                            ),
+                            color: entry.color ?? chartTheme.palette.indigo,
+                          }));
+
+                        const trafficPoint = pressureSeries.find(
+                          (point) => point.label === label,
+                        );
+
+                        if (trafficPoint) {
+                          rows.push({
+                            label: "Total traffic",
+                            value: formatCompactNumber(
+                              trafficPoint.totalTraffic,
+                            ),
+                            color: chartTheme.palette.ink,
+                          });
+                        }
+
+                        return (
+                          <ChartTooltipCard
+                            title={`${label} volume`}
+                            subtitle="Requests in this minute"
+                            rows={rows}
+                          />
+                        );
+                      }}
+                    />
+                    <Legend
+                      wrapperStyle={{ fontSize: 11, color: chartTheme.axis }}
+                      iconType="circle"
+                    />
+                    <Bar
+                      dataKey="success"
+                      name="Success"
+                      fill={chartTheme.palette.indigo}
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={18}
+                    />
+                    <Bar
+                      dataKey="failed"
+                      name="Failed"
+                      fill={chartTheme.palette.rose}
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={18}
+                    />
+                    <Bar
+                      dataKey="guests"
+                      name="Guests"
+                      fill={chartTheme.palette.amber}
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={18}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="font-heading text-base font-bold text-slate-900">
+                    Failure and guest mix
+                  </h4>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Normalized percentages so quiet failure bursts still stand
+                    out during traffic spikes.
+                  </p>
+                </div>
+                <Pill variant="neutral">Rates</Pill>
+              </div>
+
+              <div className="mt-4 h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={pressureSeries}>
+                    <CartesianGrid
+                      stroke={chartTheme.grid}
+                      vertical={false}
+                      strokeDasharray="3 3"
+                    />
+                    <XAxis
+                      dataKey="label"
+                      stroke={chartTheme.axis}
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={false}
+                      minTickGap={28}
+                    />
+                    <YAxis
+                      stroke={chartTheme.axis}
+                      fontSize={chartTheme.axisFont}
+                      tickLine={false}
+                      axisLine={false}
+                      domain={[0, 100]}
+                      tickFormatter={(value) => `${value}%`}
+                      label={{
+                        value: "% of traffic",
+                        angle: -90,
+                        position: "insideLeft",
+                        style: { fill: chartTheme.axis, fontSize: 12 },
+                      }}
+                    />
+                    <Tooltip
+                      cursor={{ stroke: chartTheme.grid }}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) {
+                          return null;
+                        }
+
+                        const rows = payload.map((entry) => ({
+                          label: String(entry.name ?? "Series"),
+                          value: `${Number(entry.value ?? 0).toFixed(1)}%`,
+                          color: entry.color ?? chartTheme.palette.indigo,
+                        }));
+
+                        return (
+                          <ChartTooltipCard
+                            title={`${label} rates`}
+                            subtitle="Share and failure mix"
+                            rows={rows}
+                          />
+                        );
+                      }}
+                    />
+                    <Legend
+                      wrapperStyle={{ fontSize: 11, color: chartTheme.axis }}
+                      iconType="circle"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="failureRatePercent"
+                      name="Failure rate"
+                      stroke={chartTheme.palette.rose}
+                      strokeWidth={2.5}
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="guestSharePercent"
+                      name="Guest share"
+                      stroke={chartTheme.palette.amber}
+                      strokeWidth={2.5}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         </Panel>
 
@@ -397,6 +823,18 @@ export function OverviewPage() {
           eyebrowTone="emerald"
           title="Growth & throughput"
           description="Daily new users, total rewrites and failed rewrites over the trailing fortnight."
+          trailing={
+            <RangeChipGroup
+              value={trendDays}
+              options={TREND_WINDOW_OPTIONS.map((value) => ({
+                label: `${value}d`,
+                value,
+              }))}
+              onChange={(value) =>
+                setTrendDays(value as (typeof TREND_WINDOW_OPTIONS)[number])
+              }
+            />
+          }
         />
         <div className="mt-6 h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -418,8 +856,58 @@ export function OverviewPage() {
                 fontSize={chartTheme.axisFont}
                 tickLine={false}
                 axisLine={false}
+                label={{
+                  value: "Events / day",
+                  angle: -90,
+                  position: "insideLeft",
+                  style: { fill: chartTheme.axis, fontSize: 12 },
+                }}
               />
-              <Tooltip contentStyle={chartTheme.tooltip} />
+              <Tooltip
+                cursor={{ fill: "rgba(16, 185, 129, 0.06)" }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) {
+                    return null;
+                  }
+
+                  const point = trendChart.find((entry) => entry.day === label);
+
+                  return (
+                    <ChartTooltipCard
+                      title={point?.fullDay ?? String(label ?? "Trend")}
+                      subtitle="Daily throughput"
+                      rows={[
+                        {
+                          label: "Rewrites",
+                          value: formatCompactNumber(
+                            Number(payload[0]?.value ?? 0),
+                          ),
+                          color: chartTheme.palette.sky,
+                        },
+                        {
+                          label: "Failed",
+                          value: formatCompactNumber(
+                            Number(payload[1]?.value ?? 0),
+                          ),
+                          color: chartTheme.palette.rose,
+                        },
+                        {
+                          label: "New users",
+                          value: formatCompactNumber(
+                            Number(payload[2]?.value ?? 0),
+                          ),
+                          color: chartTheme.palette.emerald,
+                        },
+                        {
+                          label: "Failure rate",
+                          value: `${point?.failureRatePercent.toFixed(1) ?? "0.0"}%`,
+                          color: chartTheme.palette.ink,
+                        },
+                      ]}
+                    />
+                  );
+                }}
+              />
               <Legend
                 wrapperStyle={{ fontSize: 11, color: chartTheme.axis }}
                 iconType="circle"
@@ -474,33 +962,143 @@ export function OverviewPage() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {rewritesQuery.data.map((item) => (
-              <li
-                key={item.requestId}
-                className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-indigo-50/40"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 text-[11px] font-bold text-white">
-                  {item.userEmail.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-slate-900">
-                    {item.userEmail}
+              <li key={item.requestId}>
+                <Link
+                  to={`/users?user=${item.userId}`}
+                  className="flex items-start gap-4 px-6 py-4 transition-colors hover:bg-indigo-50/40"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 text-[11px] font-bold text-white">
+                    {item.userEmail.slice(0, 2).toUpperCase()}
                   </div>
-                  <div className="mt-0.5 text-[11px] capitalize text-slate-500">
-                    {item.requestType.replaceAll("_", " ").toLowerCase()} ·{" "}
-                    {item.tone ?? item.rewriteMode ?? "general"}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-semibold text-slate-900">
+                      {item.userEmail}
+                    </div>
+                    <div className="mt-0.5 text-[11px] capitalize text-slate-500">
+                      {item.requestType.replaceAll("_", " ").toLowerCase()} ·{" "}
+                      {item.tone ?? item.rewriteMode ?? "general"}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-500">
+                      <Pill
+                        variant={
+                          providerVariant[
+                            normalizeAdminProvider(item.provider)
+                          ] ?? "sky"
+                        }
+                      >
+                        {formatAdminProviderLabel(item.provider)}
+                      </Pill>
+                      <span>
+                        {formatCompactNumber(item.totalTokens)} tokens
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {formatCompactNumber(item.creditsConsumed)} credits
+                      </span>
+                      {item.errorMessage ? (
+                        <>
+                          <span>•</span>
+                          <span className="truncate text-rose-600">
+                            {item.errorMessage}
+                          </span>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-                <Pill variant={statusVariant[item.status] ?? "neutral"}>
-                  {item.status}
-                </Pill>
-                <span className="hidden text-[11px] text-slate-500 sm:inline">
-                  {formatDateTime(item.createdAt)}
-                </span>
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <Pill variant={statusVariant[item.status] ?? "neutral"}>
+                      {item.status}
+                    </Pill>
+                    <span className="text-[11px] font-medium text-slate-500">
+                      {formatDateTime(item.createdAt)}
+                    </span>
+                  </div>
+                </Link>
               </li>
             ))}
           </ul>
         )}
       </Panel>
+    </div>
+  );
+}
+
+function formatLiveWindowLabel(windowMinutes: number) {
+  if (windowMinutes >= 1440) {
+    return `${Math.round(windowMinutes / 1440)} day`;
+  }
+
+  if (windowMinutes >= 60) {
+    const hours = windowMinutes / 60;
+    return `${hours}h`;
+  }
+
+  return `${windowMinutes}m`;
+}
+
+function RangeChipGroup<T extends string | number>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: Array<{ label: string; value: T }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-xl bg-slate-900 p-1 text-[11px] font-semibold text-slate-300 shadow-inner">
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          type="button"
+          onClick={() => onChange(option.value)}
+          className={`rounded-lg px-3 py-1.5 transition ${
+            value === option.value
+              ? "bg-slate-50 text-slate-900 shadow"
+              : "hover:text-white"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ChartTooltipCard({
+  title,
+  subtitle,
+  rows,
+}: {
+  title: string;
+  subtitle?: string;
+  rows: Array<{ label: string; value: string; color: string }>;
+}) {
+  return (
+    <div className="min-w-52 rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_20px_50px_-25px_rgba(15,23,42,0.35)] backdrop-blur">
+      <div className="text-sm font-bold text-slate-900">{title}</div>
+      {subtitle ? (
+        <div className="mt-0.5 text-[11px] font-medium text-slate-500">
+          {subtitle}
+        </div>
+      ) : null}
+      <div className="mt-3 space-y-2">
+        {rows.map((row) => (
+          <div
+            key={`${row.label}-${row.value}`}
+            className="flex items-center justify-between gap-4 text-xs"
+          >
+            <div className="flex items-center gap-2 text-slate-600">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: row.color }}
+              />
+              <span>{row.label}</span>
+            </div>
+            <span className="font-semibold text-slate-900">{row.value}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

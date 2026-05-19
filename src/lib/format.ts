@@ -49,6 +49,46 @@ export function formatShortDate(value: string) {
   }).format(new Date(value));
 }
 
+export function normalizeAdminProvider(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase();
+
+  if (!normalized) {
+    return "unknown";
+  }
+
+  if (normalized.includes("openai")) {
+    return "openai";
+  }
+
+  if (normalized.includes("gemini")) {
+    return "gemini";
+  }
+
+  return normalized;
+}
+
+export function formatAdminProviderLabel(value: string | null | undefined) {
+  const normalized = normalizeAdminProvider(value);
+
+  if (normalized === "openai") {
+    return "OpenAI";
+  }
+
+  if (normalized === "gemini") {
+    return "Gemini";
+  }
+
+  if (normalized === "unknown") {
+    return "Unknown";
+  }
+
+  return normalized
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((segment) => segment[0]!.toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
 export function initials(firstName?: string | null, lastName?: string | null) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "DK";
 }

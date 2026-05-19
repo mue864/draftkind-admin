@@ -59,6 +59,14 @@ export interface AdminFailureSignal {
   latestAt: string;
 }
 
+export interface AdminProviderUsage {
+  provider: string;
+  requestCount: number;
+  successfulRequests: number;
+  failedRequests: number;
+  totalTokens: number;
+}
+
 export interface AdminInfrastructureSnapshot {
   dbPoolMaxConnections: number | null;
   dbPoolTotalConnections: number | null;
@@ -95,6 +103,7 @@ export interface AdminIncidentAlert {
 
 export interface AdminLiveActivitySnapshot {
   capturedAt: string;
+  seriesWindowMinutes: number;
   totalRequestsLast5Minutes: number;
   rewriteRequestsLast5Minutes: number;
   rewriteRequestsLast15Minutes: number;
@@ -106,6 +115,7 @@ export interface AdminLiveActivitySnapshot {
   guestMinuteWindowRequests: number;
   activeGuestMinuteBuckets: number;
   totalTokensLast15Minutes: number;
+  providerUsage: AdminProviderUsage[];
   geminiConcurrencyLimit: number | null;
   concurrencyPressurePercent: number;
   guestPressurePercent: number;

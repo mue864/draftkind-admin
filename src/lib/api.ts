@@ -5,6 +5,7 @@ import type {
   AdminLiveActivitySnapshot,
   AdminOverview,
   AdminPlanCatalog,
+  AdminProviderUsage,
   AdminRecentRewrite,
   AdminTrendPoint,
   AdminUserDetail,
@@ -90,9 +91,12 @@ export async function getTrends(days = 14) {
   return response.data;
 }
 
-export async function getLiveActivitySnapshot() {
+export async function getLiveActivitySnapshot(windowMinutes = 60) {
   const response = await api.get<AdminLiveActivitySnapshot>(
     "/admin/live-activity",
+    {
+      params: { windowMinutes },
+    },
   );
   return response.data;
 }
@@ -102,7 +106,7 @@ export async function getPlanCatalog() {
   return response.data;
 }
 
-export async function getUsers(query: string, limit = 24) {
+export async function getUsers(query: string, limit = 100) {
   const response = await api.get<AdminUserListItem[]>("/admin/users", {
     params: {
       query: query.trim() || undefined,
@@ -118,11 +122,43 @@ export async function getUserDetail(userId: string) {
   return response.data;
 }
 
-export async function getRecentRewrites(limit = 32) {
+export async function getUserRequests(
+  userId: string,
+  limit = 20,
+  days?: number,
+) {
+  const response = await api.get<AdminRecentRewrite[]>(
+    `/admin/users/${userId}/requests`,
+    {
+      params: {
+        limit,
+        days,
+      },
+    },
+  );
+
+  return response.data;
+}
+
+export async function getRecentRewrites(limit = 32, days?: number) {
   const response = await api.get<AdminRecentRewrite[]>(
     "/admin/rewrites/recent",
     {
-      params: { limit },
+      params: {
+        limit,
+        days,
+      },
+    },
+  );
+
+  return response.data;
+}
+
+export async function getRewriteProviderUsage(days = 7) {
+  const response = await api.get<AdminProviderUsage[]>(
+    "/admin/rewrites/provider-usage",
+    {
+      params: { days },
     },
   );
 

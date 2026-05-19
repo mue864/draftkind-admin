@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
+  Activity,
   AtSign,
   CalendarClock,
   CheckCircle2,
@@ -10,7 +11,8 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { Panel } from "../components/panel";
 import {
@@ -22,12 +24,20 @@ import {
   SectionHead,
   Tile,
 } from "../components/ui";
-import { getApiErrorMessage, getUserDetail, getUsers } from "../lib/api";
 import {
+  getApiErrorMessage,
+  getOverview,
+  getUserDetail,
+  getUserRequests,
+  getUsers,
+} from "../lib/api";
+import {
+  formatAdminProviderLabel,
   formatCompactNumber,
   formatDate,
   formatDateTime,
   initials,
+  normalizeAdminProvider,
 } from "../lib/format";
 
 const subscriptionKindVariant: Record<string, PillVariant> = {
@@ -41,13 +51,41 @@ function subscriptionPill(kind: string) {
   return subscriptionKindVariant[kind.toUpperCase()] ?? "neutral";
 }
 
+const requestStatusVariant: Record<string, PillVariant> = {
+  SUCCESS: "emerald",
+  PENDING: "amber",
+  FAILED: "rose",
+};
+
+const providerVariant: Record<string, PillVariant> = {
+  openai: "emerald",
+  gemini: "indigo",
+  unknown: "neutral",
+};
+
+const DIRECTORY_LIMIT_OPTIONS = [50, 100, 250] as const;
+const REQUEST_WINDOW_OPTIONS = [7, 30, 90] as const;
+
 export function UsersPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState("");
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(
+    searchParams.get("user"),
+  );
+  const [directoryLimit, setDirectoryLimit] =
+    useState<(typeof DIRECTORY_LIMIT_OPTIONS)[number]>(100);
+  const [requestWindowDays, setRequestWindowDays] =
+    useState<(typeof REQUEST_WINDOW_OPTIONS)[number]>(30);
+
+  const overviewQuery = useQuery({
+    queryKey: ["admin", "overview", "users-page"],
+    queryFn: getOverview,
+    refetchInterval: 120_000,
+  });
 
   const usersQuery = useQuery({
-    queryKey: ["admin", "users", query],
-    queryFn: () => getUsers(query),
+    queryKey: ["admin", "users", query, directoryLimit],
+    queryFn: () => getUsers(query, directoryLimit),
     refetchInterval: 60_000,
   });
 
@@ -57,7 +95,30 @@ export function UsersPage() {
     enabled: Boolean(selectedUserId),
   });
 
+  const userRequestsQuery = useQuery({
+    queryKey: ["admin", "user-requests", selectedUserId, requestWindowDays],
+    queryFn: () =>
+      getUserRequests(selectedUserId as string, 20, requestWindowDays),
+    enabled: Boolean(selectedUserId),
+    refetchInterval: 30_000,
+  });
+
   const list = usersQuery.data ?? [];
+
+  useEffect(() => {
+    const requestedUserId = searchParams.get("user");
+
+    if (requestedUserId && requestedUserId !== selectedUserId) {
+      setSelectedUserId(requestedUserId);
+    }
+  }, [searchParams, selectedUserId]);
+
+  useEffect(() => {
+    if (!selectedUserId && list.length > 0) {
+      handleSelectUser(list[0].userId);
+    }
+  }, [list, selectedUserId]);
+
   const stats = useMemo(() => {
     const paid = list.filter(
       (u) => u.subscriptionKind?.toUpperCase() === "PAID",
@@ -65,18 +126,39 @@ export function UsersPage() {
     const trial = list.filter(
       (u) => u.subscriptionKind?.toUpperCase() === "TRIAL",
     ).length;
-    return { paid, trial, total: list.length };
-  }, [list]);
+    return {
+      paid,
+      trial,
+      total: list.length,
+      free: list.length - paid - trial,
+      directory: overviewQuery.data?.totalUsers ?? list.length,
+    };
+  }, [list, overviewQuery.data]);
+
+  function handleSelectUser(userId: string) {
+    setSelectedUserId(userId);
+
+    const next = new URLSearchParams(searchParams);
+    next.set("user", userId);
+    setSearchParams(next, { replace: true });
+  }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Tile
-          label="In view"
+          label="Loaded"
           accent="indigo"
           icon={Users}
           value={formatCompactNumber(stats.total)}
-          hint="Result count"
+          hint={`Showing up to ${formatCompactNumber(directoryLimit)} accounts`}
+        />
+        <Tile
+          label="Directory"
+          accent="slate"
+          icon={UserRound}
+          value={formatCompactNumber(stats.directory)}
+          hint="Search spans the full account base"
         />
         <Tile
           label="Paid"
@@ -96,7 +178,7 @@ export function UsersPage() {
           label="Free"
           accent="slate"
           icon={UserRound}
-          value={formatCompactNumber(stats.total - stats.paid - stats.trial)}
+          value={formatCompactNumber(stats.free)}
           hint="No paid plan"
         />
       </div>
@@ -108,16 +190,30 @@ export function UsersPage() {
               eyebrow="Directory"
               eyebrowIcon={Users}
               title="Accounts"
-              description="Search and inspect any account in seconds."
+              description="Search the full directory, load more than the old 24-account slice, and jump straight into request history."
               trailing={
-                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                  <Search size={14} className="text-slate-400" />
-                  <input
-                    type="search"
-                    placeholder="Search email or name"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    className="w-56 bg-transparent text-xs font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                    <Search size={14} className="text-slate-400" />
+                    <input
+                      type="search"
+                      placeholder="Search every user by email or name"
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      className="w-60 bg-transparent text-xs font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
+                    />
+                  </div>
+                  <OptionChipGroup
+                    value={directoryLimit}
+                    options={DIRECTORY_LIMIT_OPTIONS.map((value) => ({
+                      label: `${value}`,
+                      value,
+                    }))}
+                    onChange={(value) =>
+                      setDirectoryLimit(
+                        value as (typeof DIRECTORY_LIMIT_OPTIONS)[number],
+                      )
+                    }
                   />
                 </div>
               }
@@ -145,7 +241,7 @@ export function UsersPage() {
                     <motion.button
                       whileHover={{ x: 4 }}
                       type="button"
-                      onClick={() => setSelectedUserId(user.userId)}
+                      onClick={() => handleSelectUser(user.userId)}
                       className={`flex w-full items-center gap-4 px-6 py-4 text-left transition ${
                         active
                           ? "bg-gradient-to-r from-indigo-50/80 via-sky-50/60 to-transparent"
@@ -164,6 +260,21 @@ export function UsersPage() {
                         <div className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] font-medium text-slate-500">
                           <AtSign size={10} />
                           {user.email}
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-500">
+                          <span>{user.currentPlanName ?? "Free plan"}</span>
+                          <span>•</span>
+                          <span>
+                            {user.creditsRemaining == null
+                              ? "Credits unavailable"
+                              : `${formatCompactNumber(user.creditsRemaining)} credits`}
+                          </span>
+                          <span>•</span>
+                          <span>Created {formatDate(user.createdAt)}</span>
+                          <span>•</span>
+                          <span>
+                            {user.historyEnabled ? "History on" : "History off"}
+                          </span>
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -192,8 +303,8 @@ export function UsersPage() {
             title={selectedUserId ? "Account profile" : "Select an account"}
             description={
               selectedUserId
-                ? "Live snapshot of plan, credits, billing and lifecycle dates."
-                : "Tap any row on the left to see the full account profile."
+                ? "Live snapshot of plan, credits, lifecycle, and the user’s recent request activity."
+                : "Pick a user on the left or jump here from the live request stream."
             }
           />
 
@@ -201,14 +312,24 @@ export function UsersPage() {
             {!selectedUserId ? (
               <EmptyShell
                 title="Nothing selected"
-                description="Pick a user to inspect their plan, credits, and history."
+                description="Pick a user to inspect their plan, credits, and request history."
               />
             ) : userDetailQuery.isLoading ? (
               <LoadingShell label="Loading user…" />
             ) : userDetailQuery.error || !userDetailQuery.data ? (
               <ErrorShell message={getApiErrorMessage(userDetailQuery.error)} />
             ) : (
-              <UserDetailView detail={userDetailQuery.data} />
+              <UserDetailView
+                detail={userDetailQuery.data}
+                requests={userRequestsQuery.data ?? []}
+                requestsLoading={userRequestsQuery.isLoading}
+                requestWindowDays={requestWindowDays}
+                onRequestWindowChange={(value) =>
+                  setRequestWindowDays(
+                    value as (typeof REQUEST_WINDOW_OPTIONS)[number],
+                  )
+                }
+              />
             )}
           </div>
         </Panel>
@@ -219,11 +340,23 @@ export function UsersPage() {
 
 function UserDetailView({
   detail,
+  requests,
+  requestsLoading,
+  requestWindowDays,
+  onRequestWindowChange,
 }: {
   detail: ReturnType<typeof Object> extends never
     ? never
     : Awaited<ReturnType<typeof getUserDetail>>;
+  requests: Awaited<ReturnType<typeof getUserRequests>>;
+  requestsLoading: boolean;
+  requestWindowDays: (typeof REQUEST_WINDOW_OPTIONS)[number];
+  onRequestWindowChange: (
+    value: (typeof REQUEST_WINDOW_OPTIONS)[number],
+  ) => void;
 }) {
+  const latestRequest = requests[0] ?? null;
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-4 rounded-2xl border border-white/70 bg-gradient-to-br from-indigo-50/70 via-white to-sky-50/40 px-5 py-4">
@@ -281,6 +414,16 @@ function UserDetailView({
           label="History"
           value={detail.historyEnabled ? "Enabled" : "Disabled"}
         />
+        <Tile
+          accent="emerald"
+          label={`${requestWindowDays}-day requests`}
+          value={formatCompactNumber(requests.length)}
+        />
+        <Tile
+          accent="rose"
+          label="Latest request"
+          value={latestRequest ? formatDateTime(latestRequest.createdAt) : "—"}
+        />
       </div>
 
       <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-5">
@@ -309,6 +452,134 @@ function UserDetailView({
           <Row k="Billing" v={detail.billingPlatform ?? "—"} />
         </dl>
       </div>
+
+      <div className="rounded-2xl border border-slate-200/70 bg-white/70 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              <Activity size={11} />
+              Recent requests
+            </div>
+            <h4 className="mt-2 font-heading text-lg font-bold text-slate-900">
+              User request history
+            </h4>
+            <p className="mt-1 text-sm text-slate-500">
+              Most recent rewrite and reply requests for this account within the
+              selected window.
+            </p>
+          </div>
+          <OptionChipGroup
+            value={requestWindowDays}
+            options={REQUEST_WINDOW_OPTIONS.map((value) => ({
+              label: `${value}d`,
+              value,
+            }))}
+            onChange={(value) =>
+              onRequestWindowChange(
+                value as (typeof REQUEST_WINDOW_OPTIONS)[number],
+              )
+            }
+          />
+        </div>
+
+        <div className="mt-4">
+          {requestsLoading ? (
+            <LoadingShell label="Loading requests…" />
+          ) : requests.length === 0 ? (
+            <EmptyShell
+              title="No recent requests"
+              description="This user has no rewrite or reply activity in the current request window."
+            />
+          ) : (
+            <div className="space-y-2">
+              {requests.map((request) => (
+                <div
+                  key={request.requestId}
+                  className="rounded-2xl border border-slate-200/70 bg-white px-4 py-3 shadow-sm"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold capitalize text-slate-900">
+                          {request.requestType
+                            .replaceAll("_", " ")
+                            .toLowerCase()}
+                        </span>
+                        <Pill
+                          variant={
+                            requestStatusVariant[request.status] ?? "neutral"
+                          }
+                        >
+                          {request.status}
+                        </Pill>
+                        <Pill
+                          variant={
+                            providerVariant[
+                              normalizeAdminProvider(request.provider)
+                            ] ?? "sky"
+                          }
+                        >
+                          {formatAdminProviderLabel(request.provider)}
+                        </Pill>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-500">
+                        <span>
+                          {request.tone ?? request.rewriteMode ?? "general"}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {formatCompactNumber(request.totalTokens)} tokens
+                        </span>
+                        <span>•</span>
+                        <span>
+                          {formatCompactNumber(request.creditsConsumed)} credits
+                        </span>
+                      </div>
+                      {request.errorMessage ? (
+                        <div className="mt-2 rounded-xl border border-rose-100 bg-rose-50/70 px-3 py-2 text-xs text-rose-700">
+                          {request.errorMessage}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="shrink-0 text-xs font-medium text-slate-500">
+                      {formatDateTime(request.createdAt)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OptionChipGroup<T extends string | number>({
+  value,
+  options,[]
+  onChange,
+}: {
+  value: T;
+  options: Array<{ label: string; value: T }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-xl bg-slate-900 p-1 text-[11px] font-semibold text-slate-300 shadow-inner">
+      {options.map((option) => (
+        <button
+          key={String(option.value)}
+          type="button"
+          onClick={() => onChange(option.value)}
+          className={`rounded-lg px-3 py-1.5 transition ${
+            value === option.value
+              ? "bg-slate-50 text-slate-900 shadow"
+              : "hover:text-white"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   );
 }
