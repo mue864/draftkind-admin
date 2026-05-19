@@ -561,7 +561,7 @@ function OptionChipGroup<T extends string | number>({
   onChange,
 }: {
   value: T;
-  options: Array<{ label: string; value: T }>;
+  options: { label: string; value: T }[];
   onChange: (value: T) => void;
 }) {
   return (
