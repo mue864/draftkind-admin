@@ -1,7 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
+import {
+  getOverview,
+  isForbidden,
+  login,
+  logout,
+  setAccessToken,
+  setUnauthorizedHandler,
+} from "../lib/api";
 import type { AuthResponse } from "../types/api";
-import { getOverview, isForbidden, login, setAccessToken } from "../lib/api";
 
 const STORAGE_KEY = "draftkind.admin.session";
 
@@ -18,7 +25,9 @@ interface AdminSessionContextValue {
   signOut: () => void;
 }
 
-const AdminSessionContext = createContext<AdminSessionContextValue | null>(null);
+const AdminSessionContext = createContext<AdminSessionContextValue | null>(
+  null,
+);
 
 function readStoredSession() {
   const raw = localStorage.getItem(STORAGE_KEY);
@@ -33,7 +42,11 @@ function readStoredSession() {
   }
 }
 
-export function AdminSessionProvider({ children }: { children: React.ReactNode }) {
+export function AdminSessionProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const [session, setSession] = useState<StoredSession | null>(null);
 
   useEffect(() => {
@@ -46,6 +59,20 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     setAccessToken(stored.accessToken);
   }, []);
 
+  // F6: clear local session when the API reports a revoked / expired token
+  // so the admin console doesn't sit in an authenticated UI state spamming
+  // protected endpoints.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      localStorage.removeItem(STORAGE_KEY);
+      setAccessToken(null);
+      setSession(null);
+    });
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, []);
+
   async function signIn(email: string, password: string) {
     const auth = await login(email, password);
     setAccessToken(auth.accessToken);
@@ -55,7 +82,9 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     } catch (error) {
       setAccessToken(null);
       if (isForbidden(error)) {
-        throw new Error("This account is authenticated but not authorized for the admin console.");
+        throw new Error(
+          "This account is authenticated but not authorized for the admin console.",
+        );
       }
 
       throw error;
@@ -72,6 +101,12 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
   }
 
   function signOut() {
+    // F6: best-effort server-side revocation BEFORE we drop the local token,
+    // so the interceptor still attaches the bearer. Local sign-out always
+    // proceeds even if the network call fails.
+    void logout().catch(() => {
+      // Intentionally ignored.
+    });
     localStorage.removeItem(STORAGE_KEY);
     setAccessToken(null);
     setSession(null);
@@ -87,7 +122,11 @@ export function AdminSessionProvider({ children }: { children: React.ReactNode }
     [session],
   );
 
-  return <AdminSessionContext.Provider value={value}>{children}</AdminSessionContext.Provider>;
+  return (
+    <AdminSessionContext.Provider value={value}>
+      {children}
+    </AdminSessionContext.Provider>
+  );
 }
 
 export function useAdminSession() {

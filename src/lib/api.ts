@@ -32,9 +32,19 @@ const api = axios.create({
 });
 
 let accessToken: string | null = null;
+let unauthorizedHandler: (() => void) | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+}
+
+/**
+ * Registers a callback invoked when the API returns 401. Used by the admin
+ * session provider to trigger a local sign-out when a token is revoked
+ * server-side (F6) or has naturally expired.
+ */
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
 }
 
 api.interceptors.request.use((config) => {
@@ -44,6 +54,30 @@ api.interceptors.request.use((config) => {
 
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Skip /auth/logout to avoid recursion when the token is already invalid.
+    if (
+      axios.isAxiosError(error) &&
+      error.response?.status === 401 &&
+      unauthorizedHandler &&
+      !(error.config?.url ?? "").includes("/auth/logout")
+    ) {
+      try {
+        unauthorizedHandler();
+      } catch {
+        // Swallow handler errors so the original rejection still propagates.
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+export async function logout() {
+  await api.post("/auth/logout");
+}
 
 export function getApiErrorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
