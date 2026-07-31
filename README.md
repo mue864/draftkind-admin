@@ -31,6 +31,6 @@ VITE_API_BASE_URL=https://api.draftkind.com
 
 ## Notes
 
-- Login uses the backend `/auth/login` endpoint.
-- Admin access is verified by calling `/admin/overview` after login.
+- Login uses the backend `/auth/admin/login` endpoint, which sets the admin session cookie.
+- Admin access is verified by calling `/auth/admin/session` when the app boots.
 - The backend account must already have the `ADMIN` role.
