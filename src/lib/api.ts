@@ -7,10 +7,12 @@ import type {
   AdminPlanCatalog,
   AdminProviderUsage,
   AdminRecentRewrite,
+  AdminRiskSignal,
   AdminTrendPoint,
+  AdminUserActivityWindow,
   AdminUserDetail,
   AdminUserListItem,
-  AuthResponse,
+  AdminAuthSessionResponse,
   GoogleBillingDeadLetter,
   GoogleBillingReplayResponse,
   RevenueCatBillingDeadLetter,
@@ -26,16 +28,17 @@ export const API_BASE_URL = configuredBaseUrl || defaultBaseUrl;
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-let accessToken: string | null = null;
+let csrfToken: string | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 
-export function setAccessToken(token: string | null) {
-  accessToken = token;
+export function setAdminCsrfToken(token: string | null) {
+  csrfToken = token;
 }
 
 /**
@@ -48,8 +51,8 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 }
 
 api.interceptors.request.use((config) => {
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
+  if (csrfToken && !isSafeMethod(config.method)) {
+    config.headers["X-Admin-CSRF"] = csrfToken;
   }
 
   return config;
@@ -76,14 +79,22 @@ api.interceptors.response.use(
 );
 
 export async function logout() {
-  await api.post("/auth/logout");
+  await api.post("/auth/admin/logout");
 }
 
 export function getApiErrorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
+    if (typeof error.response?.data === "string") {
+      return error.response.data;
+    }
+
     const responseMessage =
       typeof error.response?.data?.message === "string"
         ? error.response.data.message
+        : typeof error.response?.data?.detail === "string"
+          ? error.response.data.detail
+          : typeof error.response?.data?.title === "string"
+            ? error.response.data.title
         : null;
 
     return responseMessage || error.message || "Request failed.";
@@ -105,11 +116,26 @@ export function isUnauthorized(error: unknown) {
 }
 
 export async function login(email: string, password: string) {
-  const response = await api.post<AuthResponse>("/auth/login", {
+  const response = await api.post<AdminAuthSessionResponse>("/auth/admin/login", {
     email,
     password,
   });
+  setAdminCsrfToken(response.data.csrfToken);
   return response.data;
+}
+
+export async function getAdminSession() {
+  const response = await api.get<AdminAuthSessionResponse>("/auth/admin/session");
+  setAdminCsrfToken(response.data.csrfToken);
+  return response.data;
+}
+
+function isSafeMethod(method: string | undefined) {
+  const normalized = (method ?? "get").toUpperCase();
+  return normalized === "GET"
+    || normalized === "HEAD"
+    || normalized === "OPTIONS"
+    || normalized === "TRACE";
 }
 
 export async function getOverview() {
@@ -122,6 +148,12 @@ export async function getTrends(days = 14) {
     params: { days },
   });
 
+  return response.data;
+}
+
+export async function getUserActivity() {
+  const response =
+    await api.get<AdminUserActivityWindow[]>("/admin/user-activity");
   return response.data;
 }
 
@@ -203,6 +235,29 @@ export async function getGuestUsage(limit = 12) {
   const response = await api.get<AdminGuestUsage>("/admin/guest-usage", {
     params: { limit },
   });
+
+  return response.data;
+}
+
+export async function getRiskSignals(userLimit = 50, eventLimit = 50) {
+  const response = await api.get<AdminRiskSignal>("/admin/risk-signals", {
+    params: {
+      userLimit,
+      eventLimit,
+    },
+  });
+
+  return response.data;
+}
+
+export async function updateUserModeration(
+  userId: string,
+  payload: { accountStatus: "ACTIVE" | "SUSPENDED" | "BANNED"; reason?: string },
+) {
+  const response = await api.patch<AdminUserDetail>(
+    `/admin/users/${userId}/moderation`,
+    payload,
+  );
 
   return response.data;
 }

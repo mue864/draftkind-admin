@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import {
   AlertOctagon,
   Apple,
@@ -105,16 +104,16 @@ export function BillingOpsPage() {
           title="Billing event triage"
           description="Filter and replay stuck or dead-lettered subscription events."
           trailing={
-            <div className="inline-flex rounded-xl bg-slate-900 p-1 text-[11px] font-semibold text-slate-300 shadow-inner">
+            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-[11px] font-semibold text-slate-600">
               {(["ALL", "PENDING", "DEAD_LETTER"] as const).map((label) => (
                 <button
                   key={label}
                   type="button"
                   onClick={() => setFilter(label)}
-                  className={`rounded-lg px-3 py-1.5 transition ${
+                  className={`rounded-md px-3 py-1.5 transition-colors ${
                     filter === label
-                      ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow"
-                      : "hover:text-white"
+                      ? "bg-slate-900 text-white"
+                      : "hover:bg-white hover:text-slate-900"
                   }`}
                 >
                   {label.replace("_", " ")}
@@ -181,7 +180,7 @@ function GooglePanel({
           {(query.data ?? []).map((event) => (
             <li
               key={event.eventId}
-              className="px-6 py-4 transition-colors hover:bg-indigo-50/40"
+              className="px-6 py-4 transition-colors hover:bg-slate-50"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -200,24 +199,23 @@ function GooglePanel({
                     {formatDateTime(event.updatedAt)}
                   </div>
                   {event.lastError ? (
-                    <div className="mt-2 rounded-lg border border-rose-100 bg-rose-50/70 px-3 py-2 text-[11px] font-medium text-rose-700">
+                    <div className="mt-2 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
                       {event.lastError}
                     </div>
                   ) : null}
                 </div>
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
+                <button
                   type="button"
                   disabled={pending === event.eventId && replay.isPending}
                   onClick={() => {
                     setPending(event.eventId);
                     replay.mutate(event.eventId);
                   }}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-sky-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow transition hover:shadow-md disabled:opacity-60"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-sky-800 disabled:opacity-60"
                 >
                   <Repeat2 size={12} />
                   Replay
-                </motion.button>
+                </button>
               </div>
             </li>
           ))}
@@ -256,23 +254,22 @@ function RevenueCatPanel({
           title="RevenueCat dead letters"
           description="Cross-platform billing events that failed delivery."
           trailing={
-            <motion.button
-              whileTap={{ scale: 0.96 }}
+            <button
               type="button"
               disabled={sync.isPending}
               onClick={() => sync.mutate()}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-60"
             >
               <RefreshCw
                 size={12}
                 className={sync.isPending ? "animate-spin" : ""}
               />
               {sync.isPending ? "Syncing…" : "Sync catalog"}
-            </motion.button>
+            </button>
           }
         />
         {sync.data ? (
-          <div className="mt-3 rounded-xl border border-emerald-200/70 bg-emerald-50/70 px-3 py-2 text-[11px] font-semibold text-emerald-700">
+          <div className="mt-3 rounded-lg border border-emerald-200/70 bg-emerald-50/70 px-3 py-2 text-[11px] font-semibold text-emerald-700">
             Updated {sync.data.plansUpdated} · Missed {sync.data.plansMissed}
           </div>
         ) : null}
@@ -297,7 +294,7 @@ function RevenueCatPanel({
           {(query.data ?? []).map((event) => (
             <li
               key={event.eventId}
-              className="px-6 py-4 transition-colors hover:bg-indigo-50/40"
+              className="px-6 py-4 transition-colors hover:bg-slate-50"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -315,24 +312,23 @@ function RevenueCatPanel({
                     {formatDateTime(event.updatedAt)}
                   </div>
                   {event.lastError ? (
-                    <div className="mt-2 rounded-lg border border-rose-100 bg-rose-50/70 px-3 py-2 text-[11px] font-medium text-rose-700">
+                    <div className="mt-2 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-medium text-rose-700">
                       {event.lastError}
                     </div>
                   ) : null}
                 </div>
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
+                <button
                   type="button"
                   disabled={pending === event.eventId && replay.isPending}
                   onClick={() => {
                     setPending(event.eventId);
                     replay.mutate(event.eventId);
                   }}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-1.5 text-[11px] font-semibold text-white shadow transition hover:shadow-md disabled:opacity-60"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-800 disabled:opacity-60"
                 >
                   <Repeat2 size={12} />
                   Replay
-                </motion.button>
+                </button>
               </div>
             </li>
           ))}

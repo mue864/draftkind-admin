@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import {
   CheckCircle2,
   Crown,
@@ -197,13 +196,10 @@ function PlanCard({
     : null;
 
   return (
-    <motion.article
-      whileHover={{ y: -4 }}
-      className="relative overflow-hidden rounded-2xl border border-white/70 bg-white/80 p-6 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_30px_60px_-40px_rgba(15,23,42,0.35)] backdrop-blur-xl"
-    >
+    <article className="relative overflow-hidden rounded-lg border border-slate-200 bg-white p-6">
       <span
         aria-hidden
-        className={`absolute inset-x-6 top-0 h-px bg-gradient-to-r ${plan.active ? "from-indigo-500 via-sky-500 to-teal-500" : "from-slate-400 to-slate-600"} opacity-80`}
+        className={`absolute inset-x-0 top-0 h-0.5 ${plan.active ? "bg-sky-600" : "bg-slate-300"}`}
       />
 
       <div className="flex items-start justify-between gap-3">
@@ -232,7 +228,7 @@ function PlanCard({
         {formatCompactNumber(plan.monthlyCredits)} credits / cycle
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-2 rounded-2xl bg-slate-50/70 p-3">
+      <div className="mt-5 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3">
         <Stat
           label="Paid"
           value={plan.paidClaimedSubscriptions}
@@ -253,11 +249,9 @@ function PlanCard({
             <span>{fillPercent.toFixed(0)}%</span>
           </div>
           <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/60">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${fillPercent}%` }}
-              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-              className={`h-full rounded-full ${plan.soldOut ? "bg-gradient-to-r from-rose-500 to-pink-500" : "bg-gradient-to-r from-indigo-500 via-sky-500 to-teal-500"}`}
+            <div
+              className={`h-full rounded-full ${plan.soldOut ? "bg-rose-600" : "bg-sky-600"}`}
+              style={{ width: `${fillPercent}%` }}
             />
           </div>
         </div>
@@ -278,18 +272,17 @@ function PlanCard({
       </div>
 
       {plan.active ? (
-        <motion.button
-          whileTap={{ scale: 0.97 }}
+        <button
           type="button"
           disabled={pending}
           onClick={onDeactivate}
-          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <PauseCircle size={14} />
           {pending ? "Deactivating…" : "Deactivate plan"}
-        </motion.button>
+        </button>
       ) : null}
-    </motion.article>
+    </article>
   );
 }
 

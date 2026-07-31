@@ -269,7 +269,7 @@ export function RewritesPage() {
           }
         />
         <div className="mt-6 grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-          <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="font-heading text-base font-bold text-slate-900">
@@ -355,7 +355,7 @@ export function RewritesPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="font-heading text-base font-bold text-slate-900">
@@ -469,11 +469,11 @@ export function RewritesPage() {
             description={`Filter by provider, status, user, or tone inside the selected ${formatRewriteWindowLabel(windowDays)} window.`}
             trailing={
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm">
+                <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600">
                   <CalendarRange size={14} className="text-slate-400" />
                   {formatRewriteWindowLabel(windowDays)}
                 </div>
-                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
                   <Search size={14} className="text-slate-400" />
                   <input
                     type="search"
@@ -483,16 +483,16 @@ export function RewritesPage() {
                     className="w-44 bg-transparent text-xs font-medium text-slate-700 placeholder:text-slate-400 focus:outline-none"
                   />
                 </div>
-                <div className="inline-flex rounded-xl bg-slate-900 p-1 text-[11px] font-semibold text-slate-300 shadow-inner">
+                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-[11px] font-semibold text-slate-600">
                   {(["ALL", "SUCCESS", "FAILED"] as const).map((label) => (
                     <button
                       key={label}
                       type="button"
                       onClick={() => setFilter(label)}
-                      className={`rounded-lg px-3 py-1.5 transition ${
+                      className={`rounded-md px-3 py-1.5 transition-colors ${
                         filter === label
-                          ? "bg-gradient-to-r from-indigo-500 to-sky-500 text-white shadow"
-                          : "hover:text-white"
+                          ? "bg-slate-900 text-white"
+                          : "hover:bg-white hover:text-slate-900"
                       }`}
                     >
                       {label}
@@ -565,11 +565,11 @@ export function RewritesPage() {
               {filtered.map((item) => (
                 <tr
                   key={item.requestId}
-                  className="transition-colors hover:bg-indigo-50/40"
+                  className="transition-colors hover:bg-slate-50"
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 text-[11px] font-bold text-white shadow">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-[11px] font-bold text-sky-800">
                         {item.userEmail.slice(0, 2).toUpperCase()}
                       </div>
                       <div className="min-w-0">
@@ -649,16 +649,16 @@ function RangeChipGroup<T extends string | number>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="inline-flex rounded-xl bg-slate-900 p-1 text-[11px] font-semibold text-slate-300 shadow-inner">
+    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-[11px] font-semibold text-slate-600">
       {options.map((option) => (
         <button
           key={String(option.value)}
           type="button"
           onClick={() => onChange(option.value)}
-          className={`rounded-lg px-3 py-1.5 transition ${
+          className={`rounded-md px-3 py-1.5 transition-colors ${
             value === option.value
-              ? "bg-slate-50 text-slate-900 shadow"
-              : "hover:text-white"
+              ? "bg-slate-900 text-white"
+              : "hover:bg-white hover:text-slate-900"
           }`}
         >
           {option.label}
@@ -678,7 +678,7 @@ function ChartTooltipCard({
   rows: Array<{ label: string; value: string; color: string }>;
 }) {
   return (
-    <div className="min-w-52 rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_20px_50px_-25px_rgba(15,23,42,0.35)] backdrop-blur">
+    <div className="min-w-52 rounded-lg border border-slate-200 bg-white px-4 py-3">
       <div className="text-sm font-bold text-slate-900">{title}</div>
       {subtitle ? (
         <div className="mt-0.5 text-[11px] font-medium text-slate-500">

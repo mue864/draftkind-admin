@@ -1,5 +1,4 @@
 import clsx from "clsx";
-import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -18,11 +17,11 @@ interface SectionHeadProps {
 }
 
 const eyebrowToneStyles = {
-  indigo: "border-indigo-200/70 bg-indigo-50 text-indigo-600",
-  emerald: "border-emerald-200/70 bg-emerald-50 text-emerald-600",
-  amber: "border-amber-200/70 bg-amber-50 text-amber-600",
-  rose: "border-rose-200/70 bg-rose-50 text-rose-600",
-  sky: "border-sky-200/70 bg-sky-50 text-sky-600",
+  indigo: "border-sky-200 bg-sky-50 text-sky-700",
+  emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  amber: "border-amber-200 bg-amber-50 text-amber-700",
+  rose: "border-rose-200 bg-rose-50 text-rose-700",
+  sky: "border-sky-200 bg-sky-50 text-sky-700",
 } as const;
 
 export function SectionHead({
@@ -45,7 +44,7 @@ export function SectionHead({
         {eyebrow ? (
           <div
             className={clsx(
-              "mb-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em]",
+              "mb-3 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]",
               eyebrowToneStyles[eyebrowTone],
             )}
           >
@@ -53,7 +52,7 @@ export function SectionHead({
             <span>{eyebrow}</span>
           </div>
         ) : null}
-        <h3 className="font-heading text-lg font-bold tracking-tight text-slate-900 sm:text-xl">
+        <h3 className="font-heading text-lg font-bold tracking-tight text-slate-900">
           {title}
         </h3>
         {description ? (
@@ -81,11 +80,11 @@ interface TileProps {
 }
 
 const tileAccent = {
-  indigo: { bar: "from-indigo-500 to-sky-500", text: "text-indigo-600" },
-  emerald: { bar: "from-emerald-500 to-teal-500", text: "text-emerald-600" },
-  amber: { bar: "from-amber-500 to-orange-500", text: "text-amber-600" },
-  rose: { bar: "from-rose-500 to-pink-500", text: "text-rose-600" },
-  slate: { bar: "from-slate-500 to-slate-700", text: "text-slate-600" },
+  indigo: { bar: "bg-sky-600", text: "text-sky-700" },
+  emerald: { bar: "bg-emerald-600", text: "text-emerald-700" },
+  amber: { bar: "bg-amber-500", text: "text-amber-700" },
+  rose: { bar: "bg-rose-600", text: "text-rose-700" },
+  slate: { bar: "bg-slate-500", text: "text-slate-600" },
 } as const;
 
 export function Tile({
@@ -100,19 +99,19 @@ export function Tile({
   return (
     <div
       className={clsx(
-        "relative overflow-hidden rounded-2xl border border-white/70 bg-white/70 px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]",
+        "relative overflow-hidden rounded-lg border border-slate-200 bg-white px-4 py-4",
         className,
       )}
     >
       <span
         aria-hidden
         className={clsx(
-          "absolute inset-x-3 top-0 h-px bg-gradient-to-r opacity-70",
+          "absolute inset-x-0 top-0 h-0.5",
           tone.bar,
         )}
       />
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
           {label}
         </span>
         {Icon ? (
@@ -135,7 +134,7 @@ export function Tile({
 
 const pillVariants = {
   neutral: "border-slate-200 bg-slate-50 text-slate-700",
-  indigo: "border-indigo-200 bg-indigo-50 text-indigo-700",
+  indigo: "border-sky-200 bg-sky-50 text-sky-700",
   emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
   amber: "border-amber-200 bg-amber-50 text-amber-700",
   rose: "border-rose-200 bg-rose-50 text-rose-700",
@@ -160,7 +159,7 @@ export function Pill({
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+        "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold",
         pillVariants[variant],
         className,
       )}
@@ -177,27 +176,19 @@ export function Pill({
 
 export function LoadingShell({ label }: { label: string }) {
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex min-h-[14rem] flex-col items-center justify-center gap-3 rounded-2xl border border-white/70 bg-white/60 px-6 py-10 text-center shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur"
-    >
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 text-white shadow-lg shadow-indigo-200">
-        <motion.span
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
-          className="block h-4 w-4 rounded-full border-2 border-white/40 border-t-white"
-        />
+    <div className="flex min-h-[14rem] flex-col items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-sky-50 text-sky-700">
+        <span className="block h-4 w-4 animate-spin rounded-full border-2 border-sky-200 border-t-sky-700" />
       </div>
       <div className="text-sm font-semibold text-slate-700">{label}</div>
-    </motion.div>
+    </div>
   );
 }
 
 export function ErrorShell({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-3 rounded-2xl border border-rose-200/70 bg-gradient-to-br from-rose-50 to-pink-50 px-5 py-4 text-sm font-medium text-rose-700 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
-      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rose-500 text-white">
+    <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-medium text-rose-700">
+      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-rose-600 text-white">
         !
       </span>
       <div>{message}</div>
@@ -213,7 +204,7 @@ export function EmptyShell({
   description?: string;
 }) {
   return (
-    <div className="flex min-h-[14rem] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white/50 px-6 py-10 text-center backdrop-blur">
+    <div className="flex min-h-[14rem] flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
       <div className="text-sm font-bold text-slate-700">{title}</div>
       {description ? (
         <div className="max-w-md text-xs text-slate-500">{description}</div>
@@ -231,7 +222,7 @@ export const chartTheme = {
   axis: "#64748b",
   axisFont: 12,
   palette: {
-    indigo: "#6366f1",
+    indigo: "#0369a1",
     violet: "#14b8a6",
     emerald: "#10b981",
     teal: "#14b8a6",
@@ -243,18 +234,15 @@ export const chartTheme = {
     ink: "#0b1020",
   },
   tooltip: {
-    borderRadius: 14,
-    border: "1px solid rgba(15,23,42,0.08)",
-    boxShadow: "0 20px 50px -25px rgba(15, 23, 42, 0.45)",
-    background: "rgba(255,255,255,0.96)",
-    backdropFilter: "blur(8px)",
+    borderRadius: 8,
+    border: "1px solid #d0d5dd",
+    background: "#ffffff",
     padding: "8px 12px",
   } as const,
   darkTooltip: {
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
-    boxShadow: "0 20px 50px -20px rgba(0, 0, 0, 0.55)",
-    background: "rgba(11,16,32,0.96)",
+    borderRadius: 8,
+    border: "1px solid #1f2937",
+    background: "#111827",
     color: "#f8fafc",
     padding: "8px 12px",
   } as const,
@@ -269,7 +257,7 @@ export function ShimmerDivider({ className }: { className?: string }) {
     <div
       aria-hidden
       className={clsx(
-        "h-px w-full bg-gradient-to-r from-transparent via-indigo-300/50 to-transparent",
+        "h-px w-full bg-slate-200",
         className,
       )}
     />
@@ -290,7 +278,7 @@ export function NestedCard({
   return (
     <div
       className={clsx(
-        "relative overflow-hidden rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]",
+        "relative overflow-hidden rounded-lg border border-slate-200 bg-white p-4",
         className,
       )}
     >

@@ -17,6 +17,9 @@ const RewritesPage = lazy(() =>
 const GuestUsagePage = lazy(() =>
   import("./pages/guest-usage-page").then((module) => ({ default: module.GuestUsagePage })),
 );
+const RiskSignalsPage = lazy(() =>
+  import("./pages/risk-signals-page").then((module) => ({ default: module.RiskSignalsPage })),
+);
 const PlansPage = lazy(() => import("./pages/plans-page").then((module) => ({ default: module.PlansPage })));
 const BillingOpsPage = lazy(() =>
   import("./pages/billing-ops-page").then((module) => ({ default: module.BillingOpsPage })),
@@ -25,7 +28,7 @@ const BillingOpsPage = lazy(() =>
 function RouteFallback() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-      <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-sm font-semibold text-slate-500 shadow-sm">
+      <div className="rounded-lg border border-slate-200 bg-white px-6 py-4 text-sm font-semibold text-slate-500">
         Loading workspace...
       </div>
     </div>
@@ -33,7 +36,11 @@ function RouteFallback() {
 }
 
 function ProtectedApp() {
-  const { isAuthenticated } = useAdminSession();
+  const { isAuthenticated, isLoading } = useAdminSession();
+
+  if (isLoading) {
+    return <RouteFallback />;
+  }
 
   if (!isAuthenticated) {
     return (
@@ -53,6 +60,7 @@ function ProtectedApp() {
           <Route element={<PlansPage />} path="plans" />
           <Route element={<BillingOpsPage />} path="billing" />
           <Route element={<GuestUsagePage />} path="guest-usage" />
+          <Route element={<RiskSignalsPage />} path="risk-signals" />
           <Route element={<Navigate replace to="/" />} path="*" />
         </Route>
       </Routes>

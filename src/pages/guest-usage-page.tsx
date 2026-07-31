@@ -164,11 +164,11 @@ export function GuestUsagePage() {
                   {guestQuery.data.hottestBuckets.map((bucket) => (
                     <tr
                       key={`${bucket.bucketType}-${bucket.fingerprintPrefix}-${bucket.windowStart}`}
-                      className="transition-colors hover:bg-indigo-50/40"
+                      className="transition-colors hover:bg-slate-50"
                     >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <Fingerprint size={14} className="text-indigo-500" />
+                          <Fingerprint size={14} className="text-sky-700" />
                           <div>
                             <div className="font-mono text-xs font-semibold text-slate-900">
                               {bucket.fingerprintPrefix}

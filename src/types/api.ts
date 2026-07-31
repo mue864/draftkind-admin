@@ -8,11 +8,10 @@ export interface User {
   historyEnabled: boolean;
 }
 
-export interface AuthResponse {
-  accessToken: string;
-  tokenType: string;
-  expiresAt: string;
+export interface AdminAuthSessionResponse {
   user: User;
+  expiresAt: string | null;
+  csrfToken: string | null;
 }
 
 export interface AdminPlanSummary {
@@ -44,6 +43,60 @@ export interface AdminTrendPoint {
   guestRequests: number;
 }
 
+export interface AdminUserActivityWindow {
+  window: string;
+  label: string;
+  periodStart: string;
+  periodEnd: string;
+  newUsers: number;
+  returningUsers: number;
+  activeUsers: number;
+}
+
+export interface AdminUserRiskSummary {
+  userId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  accountStatus: string;
+  moderationReason: string | null;
+  moderatedAt: string | null;
+  createdAt: string;
+  lastLoginAt: string | null;
+  riskScore: number;
+  riskLevel: string;
+  reasons: string[];
+  securityEventsLast30Days: number;
+  failedLoginsLast30Days: number;
+  emailCodeFailuresLast30Days: number;
+  rateLimitViolationsLast30Days: number;
+  guestDeviceLinksLast30Days: number;
+  requestsLast24Hours: number;
+  requestsLast7Days: number;
+  failedRequestsLast7Days: number;
+  totalTokensLast7Days: number;
+  creditsConsumedLast7Days: number;
+  latestSignalAt: string | null;
+}
+
+export interface AdminSecurityEvent {
+  id: number;
+  userId: string | null;
+  email: string | null;
+  eventType: string;
+  severity: string;
+  ipHashPrefix: string | null;
+  deviceHashPrefix: string | null;
+  requestId: number | null;
+  metadata: string | null;
+  createdAt: string;
+}
+
+export interface AdminRiskSignal {
+  users: AdminUserRiskSummary[];
+  recentEvents: AdminSecurityEvent[];
+}
+
 export interface AdminActivityMinutePoint {
   minuteStart: string;
   rewriteRequests: number;
@@ -65,6 +118,38 @@ export interface AdminProviderUsage {
   successfulRequests: number;
   failedRequests: number;
   totalTokens: number;
+}
+
+export interface AdminAiProviderPressure {
+  provider: string;
+  model: string;
+  inFlight: number;
+  successfulRequests: number;
+  failedRequests: number;
+  timeoutFailures: number;
+  rateLimitFailures: number;
+  fallbackAttempts: number;
+  fallbackSuccesses: number;
+  fallbackFailures: number;
+  lastEventAt: string | null;
+}
+
+export interface AdminQuotaPressure {
+  feature: string;
+  depletedEvents: number;
+  nearLimitEvents: number;
+  lastDepletedAt: string | null;
+  lastNearLimitAt: string | null;
+}
+
+export interface AdminAiOperationsSnapshot {
+  capturedAt: string;
+  providerRequestsInFlight: number;
+  fallbackAttempts: number;
+  fallbackSuccesses: number;
+  fallbackFailures: number;
+  providers: AdminAiProviderPressure[];
+  quotas: AdminQuotaPressure[];
 }
 
 export interface AdminInfrastructureSnapshot {
@@ -116,6 +201,7 @@ export interface AdminLiveActivitySnapshot {
   activeGuestMinuteBuckets: number;
   totalTokensLast15Minutes: number;
   providerUsage: AdminProviderUsage[];
+  aiOperations: AdminAiOperationsSnapshot | null;
   geminiConcurrencyLimit: number | null;
   concurrencyPressurePercent: number;
   guestPressurePercent: number;
@@ -167,6 +253,9 @@ export interface AdminUserListItem {
   firstName: string;
   lastName: string;
   role: string;
+  accountStatus: string;
+  moderationReason: string | null;
+  moderatedAt: string | null;
   historyEnabled: boolean;
   createdAt: string;
   currentPlanName: string | null;
@@ -183,6 +272,9 @@ export interface AdminUserDetail {
   firstName: string;
   lastName: string;
   role: string;
+  accountStatus: string;
+  moderationReason: string | null;
+  moderatedAt: string | null;
   historyEnabled: boolean;
   createdAt: string;
   lastUpdatedAt: string;

@@ -4,15 +4,14 @@
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-heading: "Sora", ui-sans-serif, system-ui, sans-serif;
 
-  /* Brand palette */
-  --color-canvas: #f6f7fb;
-  --color-ink: #0b1020;
-  --color-ink-soft: #475467;
+  --color-canvas: #f7f8fa;
+  --color-ink: #101828;
+  --color-ink-soft: #667085;
   --color-surface: #ffffff;
-  --color-surface-muted: #f1f3f9;
-  --color-border: #e3e6ef;
-  --color-accent: #6366f1;
-  --color-accent-soft: #eef0ff;
+  --color-surface-muted: #f2f4f7;
+  --color-border: #d0d5dd;
+  --color-accent: #0369a1;
+  --color-accent-soft: #e0f2fe;
 }
 
 html,
@@ -23,36 +22,24 @@ body,
 
 body {
   margin: 0;
-  background:
-    radial-gradient(
-      1100px 600px at 100% -10%,
-      rgba(99, 102, 241, 0.08),
-      transparent 60%
-    ),
-    radial-gradient(
-      900px 600px at -10% 110%,
-      rgba(16, 185, 129, 0.06),
-      transparent 55%
-    ),
-    var(--color-canvas);
+  background: var(--color-canvas);
   color: var(--color-ink);
   font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
 }
 
-/* Subtle scrollbars to match the dashboard aesthetic */
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(15, 23, 42, 0.12);
+  background: rgba(16, 24, 40, 0.2);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(15, 23, 42, 0.22);
+  background: rgba(16, 24, 40, 0.34);
   background-clip: padding-box;
 }
 
@@ -68,18 +55,4 @@ body {
 
 .pulse-dot {
   animation: shimmer-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes float-orb {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(12px, -8px, 0) scale(1.05);
-  }
-}
-
-.orb {
-  animation: float-orb 9s ease-in-out infinite;
 }

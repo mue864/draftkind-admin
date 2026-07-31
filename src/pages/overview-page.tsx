@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
@@ -54,6 +53,7 @@ import {
   getOverview,
   getRecentRewrites,
   getTrends,
+  getUserActivity,
 } from "../lib/api";
 import {
   formatAdminProviderLabel,
@@ -117,6 +117,45 @@ function emptyProviderMetric(provider: string): ProviderMetric {
   };
 }
 
+function formatQuotaFeature(feature: string) {
+  return feature
+    .toLowerCase()
+    .replaceAll("_", " ")
+    .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
+function formatLastEvent(value: string | null | undefined) {
+  return value ? formatDateTime(value) : "No events yet";
+}
+
+function OperationMiniMetric({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: "emerald" | "amber" | "rose" | "slate";
+  value: number;
+}) {
+  const toneClass = {
+    emerald: "text-emerald-700",
+    amber: "text-amber-700",
+    rose: "text-rose-700",
+    slate: "text-slate-700",
+  }[tone];
+
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+        {label}
+      </div>
+      <div className={`mt-1 font-heading text-lg font-bold ${toneClass}`}>
+        {formatCompactNumber(value)}
+      </div>
+    </div>
+  );
+}
+
 export function OverviewPage() {
   const [liveWindowMinutes, setLiveWindowMinutes] =
     useState<(typeof LIVE_WINDOW_OPTIONS)[number]["value"]>(60);
@@ -131,6 +170,11 @@ export function OverviewPage() {
   const trendsQuery = useQuery({
     queryKey: ["admin", "trends", trendDays],
     queryFn: () => getTrends(trendDays),
+    refetchInterval: 60_000,
+  });
+  const userActivityQuery = useQuery({
+    queryKey: ["admin", "user-activity"],
+    queryFn: getUserActivity,
     refetchInterval: 60_000,
   });
   const liveQuery = useQuery({
@@ -252,7 +296,12 @@ export function OverviewPage() {
     };
   }, [liveQuery.data]);
 
-  if (overviewQuery.isLoading || liveQuery.isLoading || trendsQuery.isLoading) {
+  if (
+    overviewQuery.isLoading ||
+    liveQuery.isLoading ||
+    trendsQuery.isLoading ||
+    userActivityQuery.isLoading
+  ) {
     return <LoadingShell label="Initialising console…" />;
   }
   if (overviewQuery.error || !overviewQuery.data) {
@@ -261,13 +310,20 @@ export function OverviewPage() {
   if (liveQuery.error || !liveQuery.data) {
     return <ErrorShell message={getApiErrorMessage(liveQuery.error)} />;
   }
+  if (userActivityQuery.error || !userActivityQuery.data) {
+    return <ErrorShell message={getApiErrorMessage(userActivityQuery.error)} />;
+  }
 
   const overview = overviewQuery.data;
   const live = liveQuery.data;
+  const userActivity = userActivityQuery.data;
   const providerTokensInWindow = providerUsage.ordered.reduce(
     (sum, item) => sum + item.totalTokens,
     0,
   );
+  const aiOperations = live.aiOperations;
+  const providerPressure = aiOperations?.providers ?? [];
+  const quotaPressure = aiOperations?.quotas ?? [];
   const liveWindowLabel = formatLiveWindowLabel(live.seriesWindowMinutes);
 
   return (
@@ -305,6 +361,72 @@ export function OverviewPage() {
           tone="rose"
         />
       </div>
+
+      <Panel>
+        <SectionHead
+          eyebrow="User growth"
+          eyebrowIcon={Users}
+          eyebrowTone="emerald"
+          title="New and returning users"
+          description="New accounts by signup date, plus existing users who came back and made a rewrite or reply request in each window."
+          trailing={<Pill variant="neutral">USER accounts only</Pill>}
+        />
+
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {userActivity.map((item) => {
+            const returningShare =
+              item.activeUsers > 0
+                ? (item.returningUsers / item.activeUsers) * 100
+                : 0;
+
+            return (
+              <div
+                key={item.window}
+                className="rounded-lg border border-slate-200 bg-white p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                      {item.label}
+                    </div>
+                    <div className="mt-1 text-xs font-medium text-slate-500">
+                      {formatShortDate(item.periodStart)} -{" "}
+                      {formatShortDate(item.periodEnd)}
+                    </div>
+                  </div>
+                  <Pill variant={item.returningUsers > 0 ? "emerald" : "neutral"}>
+                    {returningShare.toFixed(0)}% returning
+                  </Pill>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <Tile
+                    accent="indigo"
+                    icon={Users}
+                    label="New users"
+                    value={formatCompactNumber(item.newUsers)}
+                    hint="Signed up"
+                  />
+                  <Tile
+                    accent="emerald"
+                    icon={Activity}
+                    label="Returning"
+                    value={formatCompactNumber(item.returningUsers)}
+                    hint="Used app again"
+                  />
+                </div>
+
+                <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">
+                  <span className="font-semibold text-slate-700">
+                    {formatCompactNumber(item.activeUsers)}
+                  </span>{" "}
+                  active authenticated users in this window.
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Panel>
 
       <Panel>
         <SectionHead
@@ -363,7 +485,7 @@ export function OverviewPage() {
             {providerUsage.ordered.map((item) => (
               <div
                 key={item.provider}
-                className="rounded-2xl border border-white/70 bg-white/70 px-4 py-3 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]"
+                className="rounded-lg border border-slate-200 bg-white px-4 py-3"
               >
                 <div className="flex items-center justify-between gap-3">
                   <Pill
@@ -389,6 +511,164 @@ export function OverviewPage() {
             ))}
           </div>
         ) : null}
+      </Panel>
+
+      <Panel>
+        <SectionHead
+          eyebrow="AI operations"
+          eyebrowIcon={Gauge}
+          eyebrowTone="sky"
+          title="Live provider pressure and quota signals"
+          description="In-flight provider calls, fallback movement, and quota pressure since the backend process started."
+          trailing={
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Pill variant="sky" icon={Activity}>
+                {formatCompactNumber(aiOperations?.providerRequestsInFlight ?? 0)}{" "}
+                in flight
+              </Pill>
+              <Pill
+                variant={
+                  (aiOperations?.fallbackFailures ?? 0) > 0 ? "amber" : "emerald"
+                }
+                icon={Zap}
+              >
+                {formatCompactNumber(aiOperations?.fallbackAttempts ?? 0)}{" "}
+                fallbacks
+              </Pill>
+            </div>
+          }
+        />
+
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1.35fr_1fr]">
+          <div className="grid gap-3 md:grid-cols-3">
+            {providerPressure.map((item) => {
+              const provider = normalizeAdminProvider(item.provider);
+              const hasPressure =
+                item.inFlight > 0 ||
+                item.timeoutFailures > 0 ||
+                item.rateLimitFailures > 0 ||
+                item.fallbackFailures > 0;
+
+              return (
+                <div
+                  key={item.provider}
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Pill
+                        variant={providerVariant[provider] ?? "neutral"}
+                        icon={provider === "gemini" ? Cpu : Sparkles}
+                      >
+                        {formatAdminProviderLabel(provider)}
+                      </Pill>
+                      <div
+                        className="mt-2 truncate text-xs font-medium text-slate-500"
+                        title={item.model}
+                      >
+                        {item.model || "unknown model"}
+                      </div>
+                    </div>
+                    <span className="font-heading text-2xl font-bold text-slate-900">
+                      {formatCompactNumber(item.inFlight)}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <OperationMiniMetric
+                      label="Success"
+                      value={item.successfulRequests}
+                      tone="emerald"
+                    />
+                    <OperationMiniMetric
+                      label="Failed"
+                      value={item.failedRequests}
+                      tone={item.failedRequests > 0 ? "rose" : "slate"}
+                    />
+                    <OperationMiniMetric
+                      label="Timeout"
+                      value={item.timeoutFailures}
+                      tone={item.timeoutFailures > 0 ? "amber" : "slate"}
+                    />
+                    <OperationMiniMetric
+                      label="429"
+                      value={item.rateLimitFailures}
+                      tone={item.rateLimitFailures > 0 ? "rose" : "slate"}
+                    />
+                  </div>
+
+                  <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
+                    <span className="font-semibold text-slate-700">
+                      Fallback:
+                    </span>{" "}
+                    {formatCompactNumber(item.fallbackSuccesses)} success /{" "}
+                    {formatCompactNumber(item.fallbackFailures)} failed
+                  </div>
+                  <div className="mt-2 text-[11px] text-slate-400">
+                    Last event: {formatLastEvent(item.lastEventAt)}
+                  </div>
+
+                  {hasPressure ? (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                      <AlertTriangle size={13} />
+                      Pressure seen on this provider
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="font-heading text-base font-bold text-slate-900">
+                  Quota pressure
+                </h4>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Depleted and near-limit events recorded by quota checks.
+                </p>
+              </div>
+              <Pill variant="neutral">Live</Pill>
+            </div>
+
+            <div className="mt-4 divide-y divide-slate-100">
+              {quotaPressure.map((item) => {
+                const depleted = item.depletedEvents > 0;
+                const nearLimit = item.nearLimitEvents > 0;
+
+                return (
+                  <div
+                    key={item.feature}
+                    className="grid grid-cols-[1fr_auto] gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-800">
+                        {formatQuotaFeature(item.feature)}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Last depleted: {formatLastEvent(item.lastDepletedAt)}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <Pill variant={depleted ? "rose" : "neutral"}>
+                        {formatCompactNumber(item.depletedEvents)} depleted
+                      </Pill>
+                      <Pill variant={nearLimit ? "amber" : "neutral"}>
+                        {formatCompactNumber(item.nearLimitEvents)} near limit
+                      </Pill>
+                    </div>
+                  </div>
+                );
+              })}
+              {quotaPressure.length === 0 ? (
+                <div className="py-6 text-center text-sm text-slate-500">
+                  No quota events recorded yet.
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
       </Panel>
 
       {/* Pressure chart + infra */}
@@ -479,7 +759,7 @@ export function OverviewPage() {
           </div>
 
           <div className="mt-6 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="font-heading text-base font-bold text-slate-900">
@@ -591,7 +871,7 @@ export function OverviewPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/70 bg-white/70 p-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]">
+            <div className="rounded-lg border border-slate-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="font-heading text-base font-bold text-slate-900">
@@ -751,10 +1031,9 @@ export function OverviewPage() {
               />
             ) : (
               live.incidentAlerts.map((alert) => (
-                <motion.div
+                <div
                   key={alert.key}
-                  whileHover={{ x: 4 }}
-                  className="rounded-2xl border border-white/70 bg-gradient-to-br from-white/80 to-rose-50/30 p-4 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]"
+                  className="rounded-lg border border-rose-200 bg-rose-50 p-4"
                 >
                   <div className="flex items-center gap-2">
                     <Pill
@@ -769,10 +1048,10 @@ export function OverviewPage() {
                   <p className="mt-2 text-xs leading-5 text-slate-600">
                     {alert.summary}
                   </p>
-                  <p className="mt-2 text-[11px] font-semibold text-indigo-600">
+                  <p className="mt-2 text-[11px] font-semibold text-sky-700">
                     → {alert.suggestedAction}
                   </p>
-                </motion.div>
+                </div>
               ))
             )}
           </div>
@@ -796,7 +1075,7 @@ export function OverviewPage() {
               live.recentFailureSignals.slice(0, 6).map((signal, index) => (
                 <div
                   key={`${signal.message}-${index}`}
-                  className="rounded-xl border border-slate-200/70 bg-white/70 px-4 py-3"
+                  className="rounded-lg border border-slate-200/70 bg-white px-4 py-3"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
@@ -965,9 +1244,9 @@ export function OverviewPage() {
               <li key={item.requestId}>
                 <Link
                   to={`/users?user=${item.userId}`}
-                  className="flex items-start gap-4 px-6 py-4 transition-colors hover:bg-indigo-50/40"
+                  className="flex items-start gap-4 px-6 py-4 transition-colors hover:bg-slate-50"
                 >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 text-[11px] font-bold text-white">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-[11px] font-bold text-sky-800">
                     {item.userEmail.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1046,16 +1325,16 @@ function RangeChipGroup<T extends string | number>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="inline-flex rounded-xl bg-slate-900 p-1 text-[11px] font-semibold text-slate-300 shadow-inner">
+    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 text-[11px] font-semibold text-slate-600">
       {options.map((option) => (
         <button
           key={String(option.value)}
           type="button"
           onClick={() => onChange(option.value)}
-          className={`rounded-lg px-3 py-1.5 transition ${
+          className={`rounded-md px-3 py-1.5 transition-colors ${
             value === option.value
-              ? "bg-slate-50 text-slate-900 shadow"
-              : "hover:text-white"
+              ? "bg-slate-900 text-white"
+              : "hover:bg-white hover:text-slate-900"
           }`}
         >
           {option.label}
@@ -1075,7 +1354,7 @@ function ChartTooltipCard({
   rows: Array<{ label: string; value: string; color: string }>;
 }) {
   return (
-    <div className="min-w-52 rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-[0_20px_50px_-25px_rgba(15,23,42,0.35)] backdrop-blur">
+    <div className="min-w-52 rounded-lg border border-slate-200 bg-white px-4 py-3">
       <div className="text-sm font-bold text-slate-900">{title}</div>
       {subtitle ? (
         <div className="mt-0.5 text-[11px] font-medium text-slate-500">
@@ -1113,22 +1392,20 @@ function PressureBanner({
     live.pressureLevel === "HOT" || live.pressureLevel === "CRITICAL";
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`relative overflow-hidden rounded-3xl border p-6 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.4)] ${
+    <div
+      className={`relative overflow-hidden rounded-lg border bg-white p-6 ${
         isHot
-          ? "border-rose-200/70 bg-gradient-to-br from-rose-50 via-white to-pink-50"
-          : "border-emerald-200/70 bg-gradient-to-br from-emerald-50/70 via-white to-teal-50/40"
+          ? "border-rose-200"
+          : "border-emerald-200"
       }`}
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
           <div
-            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-lg ${
+            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg ${
               isHot
-                ? "bg-gradient-to-br from-rose-500 to-pink-500"
-                : "bg-gradient-to-br from-emerald-500 to-teal-500"
+                ? "bg-rose-50 text-rose-700"
+                : "bg-emerald-50 text-emerald-700"
             }`}
           >
             {isHot ? <Flame size={22} /> : <ShieldCheck size={22} />}
@@ -1166,7 +1443,7 @@ function PressureBanner({
           />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -1180,8 +1457,8 @@ function MiniMetric({
   icon: typeof Activity;
 }) {
   return (
-    <div className="rounded-2xl border border-white/70 bg-white/70 px-3 py-2.5 shadow-[0_1px_0_rgba(255,255,255,0.9)_inset] backdrop-blur">
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
         <Icon size={11} />
         {label}
       </div>
@@ -1204,7 +1481,7 @@ function DeltaRow({
 }) {
   const up = delta.changePercent >= 0;
   return (
-    <div className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-white/60 px-3 py-2">
+    <div className="flex items-center justify-between rounded-lg border border-slate-200/70 bg-white px-3 py-2">
       <div className="text-xs font-semibold text-slate-700">{delta.label}</div>
       <div className="flex items-center gap-2">
         <span className="font-heading text-sm font-bold text-slate-900">
