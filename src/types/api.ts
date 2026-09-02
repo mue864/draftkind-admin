@@ -264,6 +264,12 @@ export interface AdminUserListItem {
   subscriptionKind: string;
   previewEndsAt: string | null;
   premiumPreviewUsed: boolean;
+  deviceIdentities: AdminDeviceIdentity[];
+}
+
+export interface AdminDeviceIdentity {
+  fingerprint: string;
+  accountCount: number;
 }
 
 export interface AdminUserDetail {
@@ -288,6 +294,7 @@ export interface AdminUserDetail {
   premiumPreviewUsed: boolean;
   subscriptionRenewalDate: string | null;
   billingPlatform: string | null;
+  deviceIdentities: AdminDeviceIdentity[];
 }
 
 export interface AdminRecentRewrite {

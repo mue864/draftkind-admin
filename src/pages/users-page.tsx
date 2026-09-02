@@ -31,6 +31,7 @@ import {
   getUserDetail,
   getUserRequests,
   getUsers,
+  revokePremiumPreview,
   updateUserModeration,
 } from "../lib/api";
 import {
@@ -85,6 +86,7 @@ export function UsersPage() {
   );
   const [directoryLimit, setDirectoryLimit] =
     useState<(typeof DIRECTORY_LIMIT_OPTIONS)[number]>(100);
+  const [repeatDeviceOnly, setRepeatDeviceOnly] = useState(false);
   const [requestWindowDays, setRequestWindowDays] =
     useState<(typeof REQUEST_WINDOW_OPTIONS)[number]>(30);
 
@@ -95,8 +97,8 @@ export function UsersPage() {
   });
 
   const usersQuery = useQuery({
-    queryKey: ["admin", "users", query, directoryLimit],
-    queryFn: () => getUsers(query, directoryLimit),
+    queryKey: ["admin", "users", query, directoryLimit, repeatDeviceOnly],
+    queryFn: () => getUsers(query, directoryLimit, repeatDeviceOnly),
     refetchInterval: 60_000,
   });
 
@@ -128,6 +130,14 @@ export function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "user-detail"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "risk-signals"] });
+    },
+  });
+
+  const revokePreviewMutation = useMutation({
+    mutationFn: (userId: string) => revokePremiumPreview(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "user-detail"] });
     },
   });
 
@@ -243,6 +253,17 @@ export function UsersPage() {
                       )
                     }
                   />
+                  <button
+                    type="button"
+                    onClick={() => setRepeatDeviceOnly((current) => !current)}
+                    className={`rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${
+                      repeatDeviceOnly
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {repeatDeviceOnly ? "Repeat devices" : "All devices"}
+                  </button>
                 </div>
               }
             />
@@ -303,6 +324,22 @@ export function UsersPage() {
                             {user.historyEnabled ? "History on" : "History off"}
                           </span>
                         </div>
+                        {user.deviceIdentities.length > 0 ? (
+                          <div className="mt-2 space-y-1 text-[10px] font-semibold text-slate-400">
+                            {user.deviceIdentities.map((device) => (
+                              <div
+                                key={device.fingerprint}
+                                className="truncate"
+                                title={device.fingerprint}
+                              >
+                                Device {device.fingerprint.slice(0, 12)}…
+                                {device.accountCount > 1
+                                  ? ` • ${device.accountCount} accounts`
+                                  : ""}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
                         {user.accountStatus !== "ACTIVE" ? (
@@ -373,6 +410,20 @@ export function UsersPage() {
                   )
                 }
                 onModerate={(payload) => moderationMutation.mutate(payload)}
+                previewRemovalPending={
+                  revokePreviewMutation.isPending &&
+                  revokePreviewMutation.variables === userDetailQuery.data.userId
+                }
+                previewRemovalError={revokePreviewMutation.error}
+                onRemovePreview={() => {
+                  if (
+                    window.confirm(
+                      "Remove this account's active internal premium preview and restore the Free plan?",
+                    )
+                  ) {
+                    revokePreviewMutation.mutate(userDetailQuery.data.userId);
+                  }
+                }}
               />
             )}
           </div>
@@ -391,6 +442,9 @@ function UserDetailView({
   moderationError,
   onRequestWindowChange,
   onModerate,
+  previewRemovalPending,
+  previewRemovalError,
+  onRemovePreview,
 }: {
   detail: ReturnType<typeof Object> extends never
     ? never
@@ -408,6 +462,9 @@ function UserDetailView({
     accountStatus: ModerationStatus;
     reason: string;
   }) => void;
+  previewRemovalPending: boolean;
+  previewRemovalError: unknown;
+  onRemovePreview: () => void;
 }) {
   const latestRequest = requests[0] ?? null;
   const [nextStatus, setNextStatus] = useState<ModerationStatus | null>(null);
@@ -443,6 +500,18 @@ function UserDetailView({
                 <AtSign size={11} />
                 {detail.email}
               </div>
+              {detail.deviceIdentities.length > 0 ? (
+                <div className="mt-2 space-y-1 text-[11px] font-semibold text-slate-500">
+                  {detail.deviceIdentities.map((device) => (
+                    <div key={device.fingerprint} title={device.fingerprint}>
+                      Device fingerprint: {device.fingerprint}
+                      {device.accountCount > 1
+                        ? ` • shared by ${device.accountCount} accounts`
+                        : ""}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Pill
                   variant={detail.role === "ADMIN" ? "ink" : "neutral"}
@@ -468,6 +537,16 @@ function UserDetailView({
           </div>
 
           <div className="flex shrink-0 flex-wrap gap-2">
+            {detail.premiumPreviewUsed ? (
+              <button
+                type="button"
+                onClick={onRemovePreview}
+                disabled={previewRemovalPending}
+                className="inline-flex h-9 items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {previewRemovalPending ? "Removing preview…" : "Remove preview"}
+              </button>
+            ) : null}
             {detail.role === "USER" && detail.accountStatus === "ACTIVE" ? (
               <>
                 <button
@@ -514,6 +593,12 @@ function UserDetailView({
         {moderationError ? (
           <div className="mt-4">
             <ErrorShell message={getApiErrorMessage(moderationError)} />
+          </div>
+        ) : null}
+
+        {previewRemovalError ? (
+          <div className="mt-4">
+            <ErrorShell message={getApiErrorMessage(previewRemovalError)} />
           </div>
         ) : null}
 

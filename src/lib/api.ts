@@ -172,11 +172,16 @@ export async function getPlanCatalog() {
   return response.data;
 }
 
-export async function getUsers(query: string, limit = 100) {
+export async function getUsers(
+  query: string,
+  limit = 100,
+  repeatDevice = false,
+) {
   const response = await api.get<AdminUserListItem[]>("/admin/users", {
     params: {
       query: query.trim() || undefined,
       limit,
+      repeatDevice: repeatDevice || undefined,
     },
   });
 
@@ -185,6 +190,13 @@ export async function getUsers(query: string, limit = 100) {
 
 export async function getUserDetail(userId: string) {
   const response = await api.get<AdminUserDetail>(`/admin/users/${userId}`);
+  return response.data;
+}
+
+export async function revokePremiumPreview(userId: string) {
+  const response = await api.post<AdminUserDetail>(
+    `/admin/users/${userId}/premium-preview/revoke`,
+  );
   return response.data;
 }
 
