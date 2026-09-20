@@ -297,6 +297,12 @@ export interface AdminUserDetail {
   deviceIdentities: AdminDeviceIdentity[];
 }
 
+export interface CreditsResponse {
+  planName: string;
+  creditsRemaining: number;
+  renewalDate: string | null;
+}
+
 export interface AdminRecentRewrite {
   requestId: number;
   userId: string;

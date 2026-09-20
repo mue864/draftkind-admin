@@ -5,6 +5,7 @@ import {
   Ban,
   CalendarClock,
   CheckCircle2,
+  CirclePlus,
   PauseCircle,
   Search,
   ShieldCheck,
@@ -27,6 +28,7 @@ import {
 } from "../components/ui";
 import {
   getApiErrorMessage,
+  grantCompensationCredits,
   getOverview,
   getUserDetail,
   getUserRequests,
@@ -135,6 +137,18 @@ export function UsersPage() {
 
   const revokePreviewMutation = useMutation({
     mutationFn: (userId: string) => revokePremiumPreview(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "user-detail"] });
+    },
+  });
+
+  const grantCreditsMutation = useMutation({
+    mutationFn: (payload: { userId: string; credits: number; reason: string }) =>
+      grantCompensationCredits(payload.userId, {
+        credits: payload.credits,
+        reason: payload.reason,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "user-detail"] });
@@ -424,6 +438,12 @@ export function UsersPage() {
                     revokePreviewMutation.mutate(userDetailQuery.data.userId);
                   }
                 }}
+                grantCreditsPending={
+                  grantCreditsMutation.isPending &&
+                  grantCreditsMutation.variables?.userId === userDetailQuery.data.userId
+                }
+                grantCreditsError={grantCreditsMutation.error}
+                onGrantCredits={(payload) => grantCreditsMutation.mutate(payload)}
               />
             )}
           </div>
@@ -445,6 +465,9 @@ function UserDetailView({
   previewRemovalPending,
   previewRemovalError,
   onRemovePreview,
+  grantCreditsPending,
+  grantCreditsError,
+  onGrantCredits,
 }: {
   detail: ReturnType<typeof Object> extends never
     ? never
@@ -465,10 +488,15 @@ function UserDetailView({
   previewRemovalPending: boolean;
   previewRemovalError: unknown;
   onRemovePreview: () => void;
+  grantCreditsPending: boolean;
+  grantCreditsError: unknown;
+  onGrantCredits: (payload: { userId: string; credits: number; reason: string }) => void;
 }) {
   const latestRequest = requests[0] ?? null;
   const [nextStatus, setNextStatus] = useState<ModerationStatus | null>(null);
   const [reason, setReason] = useState("");
+  const [compensationCredits, setCompensationCredits] = useState("3");
+  const [compensationReason, setCompensationReason] = useState("");
   const needsReason = nextStatus !== null && nextStatus !== "ACTIVE";
 
   function applyModeration() {
@@ -481,6 +509,18 @@ function UserDetailView({
     });
     setNextStatus(null);
     setReason("");
+  }
+
+  function grantCredits() {
+    const credits = Number(compensationCredits);
+    if (!Number.isInteger(credits) || credits < 1 || credits > 10_000 || !compensationReason.trim()) {
+      return;
+    }
+    if (!window.confirm(`Grant ${credits} compensation credit${credits === 1 ? "" : "s"} to ${detail.email}?`)) {
+      return;
+    }
+    onGrantCredits({ userId: detail.userId, credits, reason: compensationReason.trim() });
+    setCompensationReason("");
   }
 
   return (
@@ -681,6 +721,38 @@ function UserDetailView({
           value={latestRequest ? formatDateTime(latestRequest.createdAt) : "—"}
         />
       </div>
+
+      <section className="border-y border-slate-200 py-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
+              <CirclePlus size={16} className="text-sky-700" />
+              Compensation credits
+            </div>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Restore credits for a verified incident. The reason is retained in subscription history and the grant expires with this allowance period.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 text-xs font-semibold text-slate-500">
+            Current balance: {detail.creditsRemaining == null ? "—" : formatCompactNumber(detail.creditsRemaining)}
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto] sm:items-end">
+          <label>
+            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">Credits</span>
+            <input type="number" min="1" max="10000" inputMode="numeric" value={compensationCredits} onChange={(event) => setCompensationCredits(event.target.value)} className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100" />
+          </label>
+          <label>
+            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">Incident reason</span>
+            <input value={compensationReason} onChange={(event) => setCompensationReason(event.target.value)} maxLength={500} placeholder="e.g. Reply entitlement incident" className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100" />
+          </label>
+          <button type="button" disabled={grantCreditsPending || !compensationReason.trim() || !Number.isInteger(Number(compensationCredits)) || Number(compensationCredits) < 1 || Number(compensationCredits) > 10_000} onClick={grantCredits} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 text-sm font-bold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300">
+            <CirclePlus size={16} />
+            {grantCreditsPending ? "Granting…" : "Grant credits"}
+          </button>
+        </div>
+        {grantCreditsError ? <div className="mt-3"><ErrorShell message={getApiErrorMessage(grantCreditsError)} /></div> : null}
+      </section>
 
       <div className="rounded-lg border border-slate-200 bg-white p-5">
         <div className="mb-3 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">

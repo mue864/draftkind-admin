@@ -13,6 +13,7 @@ import type {
   AdminUserDetail,
   AdminUserListItem,
   AdminAuthSessionResponse,
+  CreditsResponse,
   GoogleBillingDeadLetter,
   GoogleBillingReplayResponse,
   RevenueCatBillingDeadLetter,
@@ -196,6 +197,17 @@ export async function getUserDetail(userId: string) {
 export async function revokePremiumPreview(userId: string) {
   const response = await api.post<AdminUserDetail>(
     `/admin/users/${userId}/premium-preview/revoke`,
+  );
+  return response.data;
+}
+
+export async function grantCompensationCredits(
+  userId: string,
+  payload: { credits: number; reason: string },
+) {
+  const response = await api.post<CreditsResponse>(
+    `/admin/users/${userId}/credits`,
+    payload,
   );
   return response.data;
 }
