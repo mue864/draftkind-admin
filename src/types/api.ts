@@ -260,6 +260,7 @@ export interface AdminUserListItem {
   createdAt: string;
   currentPlanName: string | null;
   creditsRemaining: number | null;
+  compensationCreditsGranted: number | null;
   subscriptionStatus: string | null;
   subscriptionKind: string;
   previewEndsAt: string | null;
@@ -288,6 +289,7 @@ export interface AdminUserDetail {
   rewritesLast30Days: number;
   currentPlanName: string | null;
   creditsRemaining: number | null;
+  compensationCreditsGranted: number | null;
   subscriptionStatus: string | null;
   subscriptionKind: string;
   previewEndsAt: string | null;

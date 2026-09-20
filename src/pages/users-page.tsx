@@ -332,6 +332,10 @@ export function UsersPage() {
                               : `${formatCompactNumber(user.creditsRemaining)} credits`}
                           </span>
                           <span>•</span>
+                          <span>
+                            {formatCompactNumber(user.compensationCreditsGranted ?? 0)} compensated
+                          </span>
+                          <span>•</span>
                           <span>Created {formatDate(user.createdAt)}</span>
                           <span>•</span>
                           <span>
@@ -694,6 +698,11 @@ function UserDetailView({
               ? "—"
               : formatCompactNumber(detail.creditsRemaining)
           }
+        />
+        <Tile
+          accent="indigo"
+          label="Compensated this period"
+          value={formatCompactNumber(detail.compensationCreditsGranted ?? 0)}
         />
         <Tile
           accent="emerald"
